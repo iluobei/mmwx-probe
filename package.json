@@ -22,13 +22,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/d3-geo": "^3.1.1",
+    "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react-swc": "^4.1.0",
+    "d3-geo": "^3.1.1",
+    "i18n-iso-countries": "^7.14.0",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.2.1",
+    "topojson-client": "^3.1.0",
     "twemoji": "^14.0.2",
-    "vite": "^7.1.9"
+    "vite": "^7.1.9",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260731.1",

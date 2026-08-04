@@ -22,6 +22,7 @@ export interface ProbePingSeries {
 
 export interface ProbeServer {
   name?: string
+  region?: string
   online: boolean
   upload_speed?: number
   download_speed?: number
@@ -36,12 +37,33 @@ export interface ProbeServer {
   disk_used?: number
   disk_total?: number
   ping?: ProbePingSeries[]
+  expires_at?: string
+  renewal_price?: number
+  renewal_price_cny?: number
+  renewal_cycle?: 'month' | 'quarter' | 'half_year' | 'year'
+  renewal_currency?: string
+  provider_name?: string
+  provider_url?: string
+  telecom_paid_peer?: boolean
+  return_routes?: ProbeReturnRoute[]
+}
+
+export interface ProbeReturnRoute {
+  carrier: 'telecom' | 'unicom' | 'mobile'
+  region?: string
+  route_type: string
+  tested_at?: string
 }
 
 export interface ProbePayload {
   enabled: boolean
+  show_globe?: boolean
   title?: string
   logo?: string
   appearance?: ProbeAppearance
+  license_badge?: {
+    name?: string
+    display_name?: string
+  }
   servers?: ProbeServer[]
 }

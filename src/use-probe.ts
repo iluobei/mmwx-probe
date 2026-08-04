@@ -59,13 +59,14 @@ export function useProbe(): { data?: ProbePayload; error?: string } {
     }
 
     applyAppearance()
-    void poll()
+    // Keep polling as a fallback even when the WebSocket handshake succeeds.
+    // Some proxies leave an idle WebSocket open without forwarding later frames,
+    // which otherwise freezes realtime speed at the first snapshot.
+    startPolling()
     try {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
       ws = new WebSocket(`${protocol}//${location.host}/api/stream`)
-      const stall = window.setTimeout(startPolling, 12000)
       ws.onmessage = (event) => {
-        window.clearTimeout(stall)
         try { accept(JSON.parse(event.data) as ProbePayload) } catch { /* wait for next frame */ }
       }
       ws.onerror = startPolling
@@ -78,6 +79,7 @@ export function useProbe(): { data?: ProbePayload; error?: string } {
       stopped = true
       ws?.close()
       if (timer.current) window.clearInterval(timer.current)
+      timer.current = undefined
     }
   }, [])
 
