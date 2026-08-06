@@ -24,7 +24,9 @@ Worker 仅代理三个固定路径，不接受访客指定上游地址，因此�
 | 对外路径 | 主控路径 | 用途 |
 | --- | --- | --- |
 | `/api/probe` | `/api/public/probe-servers` | 服务器状态 |
-| `/api/series` | `/api/public/probe-series` | 延迟与丢包率历史 |
+| `/api/series` | `/api/public/probe-series` | 24 小时延迟、丢包率及系统指标历史；追加 `metric=system` 获取 CPU、内存、网速和累计流量序列 |
+
+服务器列表中的每个 `servers[]` 对象还会返回 `daily_traffic`，固定包含最近 30 个自然日的 `date`、`uplink`、`downlink` 和 `total`（字节）。
 | `/api/stream` | `/api/public/probe-ws` | 实时 WebSocket |
 
 ## 准备工作
