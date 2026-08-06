@@ -399,6 +399,19 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.metric-button {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .meter {
   height: 6px;
   margin-top: 6px;
@@ -812,7 +825,10 @@ footer a:hover {
   height: 26px;
   max-width: min(88vw, 420px);
   align-items: center;
-  overflow: hidden;
+  overflow: visible;
+  opacity: 0;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
   padding: 0 13px;
   border: 1px solid rgba(217, 119, 87, .45);
   border-radius: 3px;
@@ -820,30 +836,63 @@ footer a:hover {
   box-shadow: 2px 2px 0 rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .1);
   color: #f4cd9c;
 }
-.probe-license-nameplate strong {
+.probe-license-text {
+  position: relative;
+  z-index: 2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+  font-weight: 600;
   letter-spacing: .02em;
+  clip-path: inset(0 100% 0 0);
+  will-change: clip-path;
 }
 .probe-license-stars {
-  margin-right: 7px;
-  color: #f472b6;
-  font-size: 11px;
-  text-shadow: 0 0 5px currentColor;
-  animation: probe-license-stars 2.2s ease-in-out infinite;
-}
-.probe-license-nameplate > i {
+  pointer-events: none;
   position: absolute;
+  z-index: 3;
   top: 0;
   bottom: 0;
-  left: -55%;
+  left: 0;
+  width: 22px;
+  margin-left: -15px;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.probe-license-stars .spark {
+  position: absolute;
+}
+.probe-license-stars .spark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>") center / contain no-repeat;
+  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 7px currentColor);
+}
+.probe-license-shine-clip {
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.probe-license-shine {
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: 0;
   width: 45%;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .62), transparent);
   transform: skewX(-16deg);
-  animation: probe-license-shine 5.5s ease-in-out infinite;
+  opacity: 0;
+  will-change: transform, opacity;
 }
 :root.theme-flat .probe-license-nameplate {
   border-color: rgba(255, 255, 255, .12);
@@ -858,16 +907,6 @@ footer a:hover {
   background: linear-gradient(135deg, #7c3f9e 0%, #c94f9c 52%, #6a5ae0 100%);
   color: #fff5fb;
   box-shadow: 0 2px 12px rgba(201, 79, 156, .32), inset 0 1px 0 rgba(255, 255, 255, .32);
-}
-@keyframes probe-license-shine {
-  0%, 38% { transform: translateX(0) skewX(-16deg); opacity: 0; }
-  46% { opacity: 1; }
-  70% { transform: translateX(350%) skewX(-16deg); opacity: 0; }
-  100% { transform: translateX(350%) skewX(-16deg); opacity: 0; }
-}
-@keyframes probe-license-stars {
-  0%, 100% { transform: translateY(0) scale(.9); opacity: .65; }
-  50% { transform: translateY(-1px) scale(1.12); opacity: 1; }
 }
 .modal-backdrop {
   position: fixed;
