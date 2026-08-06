@@ -451,6 +451,42 @@ function averagePing(series: ProbePingSeries[]): ProbePingSeries {
   };
 }
 
+function lossScale(rows: Array<Record<string, string | number | null>>) {
+  const peak = Math.max(
+    0,
+    ...rows.flatMap((row) =>
+      Object.entries(row)
+        .filter(([key]) => key !== "time")
+        .map(([, value]) => (typeof value === "number" ? value : 0)),
+    ),
+  );
+  const scales = [
+    { max: 0.1, step: 0.025 },
+    { max: 0.2, step: 0.05 },
+    { max: 0.5, step: 0.1 },
+    { max: 1, step: 0.25 },
+    { max: 2, step: 0.5 },
+    { max: 5, step: 1 },
+    { max: 10, step: 2 },
+    { max: 20, step: 5 },
+    { max: 50, step: 10 },
+    { max: 100, step: 25 },
+  ];
+  const selected = scales.find((item) => peak <= item.max) ?? scales[scales.length - 1];
+  return {
+    max: selected.max,
+    ticks: Array.from(
+      { length: Math.round(selected.max / selected.step) + 1 },
+      (_, index) => Number((index * selected.step).toFixed(3)),
+    ),
+  };
+}
+
+function formatLossTick(value: number): string {
+  const digits = value < 0.1 ? 3 : value < 1 ? 2 : value < 10 ? 1 : 0;
+  return `${value.toFixed(digits).replace(/\.?0+$/, "")}%`;
+}
+
 function TrendDialog({
   serverIndex,
   initial,
@@ -534,6 +570,7 @@ function TrendDialog({
       }),
     [series, mode, timeMeta],
   );
+  const dynamicLossScale = useMemo(() => lossScale(rows), [rows]);
 
   return createPortal(
     <div className="modal-backdrop" role="presentation" onMouseDown={close}>
@@ -582,8 +619,10 @@ function TrendDialog({
                   tick={{ fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
-                  unit={mode === "loss" ? "%" : "ms"}
-                  domain={mode === "loss" ? [0, 100] : undefined}
+                  unit={mode === "loss" ? undefined : "ms"}
+                  domain={mode === "loss" ? [0, dynamicLossScale.max] : undefined}
+                  ticks={mode === "loss" ? dynamicLossScale.ticks : undefined}
+                  tickFormatter={mode === "loss" ? (value) => formatLossTick(Number(value)) : undefined}
                 />
                 <Tooltip
                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
