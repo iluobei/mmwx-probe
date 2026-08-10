@@ -789,7 +789,8 @@ button {
 }
 .table-speed {
   display: flex;
-  gap: 14px;
+  flex-direction: column;
+  gap: 6px;
   color: var(--primary);
   white-space: nowrap;
 }
@@ -852,8 +853,8 @@ button {
 }
 .table-ping-pair {
   display: grid;
-  grid-template-columns: repeat(2, 105px);
-  gap: 12px;
+  grid-template-columns: 120px;
+  gap: 8px;
 }
 .table-ping small {
   color: var(--muted);
