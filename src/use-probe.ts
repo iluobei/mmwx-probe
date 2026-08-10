@@ -4,7 +4,8 @@ import type { ProbeAppearance, ProbePayload, ThemeName } from './types'
 const APPEARANCE_CACHE = 'mmwx-probe-appearance'
 
 function normalizeTheme(value?: string): ThemeName {
-  return value === 'anime' || value === 'flat' ? value : 'pixel'
+  const theme = value?.trim()
+  return theme && /^[A-Za-z0-9_-]{1,64}$/.test(theme) ? theme : 'pixel'
 }
 
 export function applyAppearance(input?: ProbeAppearance) {
@@ -18,7 +19,10 @@ export function applyAppearance(input?: ProbeAppearance) {
   const appearance = input || cached || { theme: 'pixel', color_mode: 'light' }
   const theme = normalizeTheme(appearance.theme)
   const root = document.documentElement
-  root.classList.remove('theme-pixel', 'theme-flat', 'theme-anime', 'dark')
+  for (const className of Array.from(root.classList)) {
+    if (className.startsWith('theme-')) root.classList.remove(className)
+  }
+  root.classList.remove('dark')
   root.classList.add(`theme-${theme}`)
   const dark = appearance.color_mode === 'dark' ||
     (appearance.color_mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)

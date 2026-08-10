@@ -1,4 +1,4 @@
-export type ThemeName = 'pixel' | 'flat' | 'anime'
+export type ThemeName = string
 
 export interface ProbeAppearance {
   theme: ThemeName
@@ -30,7 +30,12 @@ export interface ProbeServer {
   upload_speed?: number
   download_speed?: number
   traffic_used?: number
+  traffic_used_up?: number
+  traffic_used_down?: number
+  traffic_used_total?: number
   traffic_limit?: number
+  period_start?: string
+  period_end?: string
   cumulative_up?: number
   cumulative_down?: number
   daily_traffic?: Array<{

@@ -26,7 +26,7 @@ Worker 仅代理三个固定路径，不接受访客指定上游地址，因此�
 | `/api/probe` | `/api/public/probe-servers` | 服务器状态 |
 | `/api/series` | `/api/public/probe-series` | 24 小时延迟、丢包率及系统指标历史；追加 `metric=system` 获取 CPU、内存、网速和累计流量序列 |
 
-服务器列表中的每个 `servers[]` 对象还会返回 `daily_traffic`，固定包含最近 30 个自然日的 `date`、`uplink`、`downlink` 和 `total`（字节）。
+服务器列表中的每个 `servers[]` 对象还会返回当前计费周期的 `daily_traffic`，元素包含 `date`、`uplink`、`downlink` 和 `total`（字节）。周期汇总字段包括 `traffic_used_up`、`traffic_used_down`、`traffic_used_total`，周期边界为 `period_start`（含）和 `period_end`（不含）。兼容字段 `traffic_used` 仍表示按主控服务器统计模式计算的计费用量。
 | `/api/stream` | `/api/public/probe-ws` | 实时 WebSocket |
 
 ## 准备工作

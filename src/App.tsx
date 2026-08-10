@@ -348,7 +348,7 @@ function TrafficDialog({
                   labelFormatter={(value) => String(value)}
                   formatter={(value, name) => [
                     bytes(Number(value)),
-                    name === "uplink" ? "上行" : "下行",
+                    name === "uplink" || name === "上行" ? "上行" : "下行",
                   ]}
                 />
                 <Line
@@ -472,7 +472,8 @@ function lossScale(rows: Array<Record<string, string | number | null>>) {
     { max: 50, step: 10 },
     { max: 100, step: 25 },
   ];
-  const selected = scales.find((item) => peak <= item.max) ?? scales[scales.length - 1];
+  const selected =
+    scales.find((item) => peak <= item.max) ?? scales[scales.length - 1];
   return {
     max: selected.max,
     ticks: Array.from(
@@ -620,9 +621,15 @@ function TrendDialog({
                   axisLine={false}
                   tickLine={false}
                   unit={mode === "loss" ? undefined : "ms"}
-                  domain={mode === "loss" ? [0, dynamicLossScale.max] : undefined}
+                  domain={
+                    mode === "loss" ? [0, dynamicLossScale.max] : undefined
+                  }
                   ticks={mode === "loss" ? dynamicLossScale.ticks : undefined}
-                  tickFormatter={mode === "loss" ? (value) => formatLossTick(Number(value)) : undefined}
+                  tickFormatter={
+                    mode === "loss"
+                      ? (value) => formatLossTick(Number(value))
+                      : undefined
+                  }
                 />
                 <Tooltip
                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
@@ -927,6 +934,18 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
                 }}
               />
             </div>
+            {(server.traffic_used_up !== undefined ||
+              server.traffic_used_down !== undefined) && (
+              <small className="metric-detail">
+                ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
+                {bytes(server.traffic_used_down, false)}
+              </small>
+            )}
+            {server.period_start && server.period_end && (
+              <small className="metric-detail">
+                {server.period_start} — {server.period_end}
+              </small>
+            )}
           </button>
         )}
       </div>
@@ -941,6 +960,13 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
             <ArrowUp size={16} />
             {speed(server.upload_speed)}
           </span>
+        </div>
+      )}
+      {(server.cumulative_up !== undefined ||
+        server.cumulative_down !== undefined) && (
+        <div className="cumulative-traffic">
+          <span>↓ {bytes(server.cumulative_down, false)}</span>
+          <span>↑ {bytes(server.cumulative_up, false)}</span>
         </div>
       )}
       {!!server.ping?.length && (
@@ -1002,13 +1028,42 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
   );
 }
 
-function TableMetric({ percent }: { percent?: number }) {
-  if (percent === undefined) return <span className="dash">—</span>;
+function TableMetric({ label, percent }: { label: string; percent?: number }) {
   return (
     <div className="table-metric">
-      <span>{percent.toFixed(1)}%</span>
+      <span className="table-metric-head">
+        <small>{label}</small>
+        <span>{percent === undefined ? "—" : `${percent.toFixed(1)}%`}</span>
+      </span>
       <div className="meter">
-        <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+        {percent !== undefined && (
+          <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TableResources({ server }: { server: ProbeServer }) {
+  const memory = server.mem_total
+    ? pct(server.mem_used, server.mem_total)
+    : undefined;
+  const disk = server.disk_total
+    ? pct(server.disk_used, server.disk_total)
+    : undefined;
+  return (
+    <div className="table-resources">
+      <div className="table-resource-row">
+        <TableMetric label="CPU" percent={server.cpu_pct} />
+      </div>
+      <div className="table-resource-row">
+        <TableMetric label="内存" percent={memory} />
+      </div>
+      <div className="table-resource-row">
+        <TableMetric label="硬盘" percent={disk} />
+      </div>
+      <div className="table-resource-row">
+        <TableTraffic server={server} label="流量" />
       </div>
     </div>
   );
@@ -1021,53 +1076,175 @@ function TablePing({
   ping?: ProbePingSeries[];
   serverIndex: number;
 }) {
-  const [open, setOpen] = useState(false);
+  const [latencyOpen, setLatencyOpen] = useState(false);
+  const [lossOpen, setLossOpen] = useState(false);
   if (!ping?.length) return <span className="dash">—</span>;
   const average = averagePing(ping);
   const lines = [{ ...average, key: "__avg__" }, ...ping];
   return (
     <>
-      <button
-        className="table-ping"
-        type="button"
-        onClick={() => setOpen(true)}
-      >
-        <span>
-          <strong>
-            {average.current_ms < 0
-              ? "超时"
-              : `${average.current_ms.toFixed(0)} ms`}
-          </strong>
-          <b>{average.loss_pct.toFixed(1)}%</b>
-        </span>
-        <em>
-          {average.buckets.map((bucket, index) => (
-            <i
-              key={index}
-              className={
-                bucket.ms < 0 && bucket.loss < 0
-                  ? "none"
-                  : bucket.ms < 0
-                    ? "bad"
-                    : bucket.ms >= 200
-                      ? "warn"
-                      : "good"
-              }
-            />
-          ))}
-        </em>
-      </button>
-      {open && (
+      <div className="table-ping-pair">
+        <button
+          className="table-ping"
+          type="button"
+          onClick={() => setLatencyOpen(true)}
+        >
+          <span>
+            <small>延迟</small>
+            <strong>
+              {average.current_ms < 0
+                ? "超时"
+                : `${average.current_ms.toFixed(0)} ms`}
+            </strong>
+          </span>
+          <em>
+            {average.buckets.map((bucket, index) => (
+              <i
+                key={index}
+                className={
+                  bucket.ms < 0 && bucket.loss < 0
+                    ? "none"
+                    : bucket.ms < 0
+                      ? "bad"
+                      : bucket.ms >= 200
+                        ? "warn"
+                        : "good"
+                }
+              />
+            ))}
+          </em>
+        </button>
+        <button
+          className="table-ping"
+          type="button"
+          onClick={() => setLossOpen(true)}
+        >
+          <span>
+            <small>丢包</small>
+            <b>{average.loss_pct.toFixed(1)}%</b>
+          </span>
+          <em>
+            {average.buckets.map((bucket, index) => (
+              <i
+                key={index}
+                className={
+                  bucket.loss < 0
+                    ? "none"
+                    : bucket.loss >= 20
+                      ? "bad"
+                      : bucket.loss > 0
+                        ? "warn"
+                        : "good"
+                }
+              />
+            ))}
+          </em>
+        </button>
+      </div>
+      {latencyOpen && (
         <TrendDialog
           serverIndex={serverIndex}
           initial={lines}
           targetKey="__avg__"
           title="平均"
           mode="latency"
-          close={() => setOpen(false)}
+          close={() => setLatencyOpen(false)}
+        />
+      )}
+      {lossOpen && (
+        <TrendDialog
+          serverIndex={serverIndex}
+          initial={lines}
+          targetKey="__avg__"
+          title="平均"
+          mode="loss"
+          close={() => setLossOpen(false)}
         />
       )}
     </>
+  );
+}
+
+function TableTraffic({
+  server,
+  label,
+}: {
+  server: ProbeServer;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (server.traffic_used === undefined) return <span className="dash">—</span>;
+  return (
+    <>
+      <button
+        type="button"
+        className="table-traffic table-traffic-button"
+        onClick={() => server.daily_traffic?.length && setOpen(true)}
+      >
+        <span className="table-metric-head">
+          {label && <small>{label}</small>}
+          <span>
+            {server.traffic_limit
+              ? `${bytes(server.traffic_used, false)} / ${bytes(server.traffic_limit, false)}`
+              : bytes(server.traffic_used, false)}
+          </span>
+        </span>
+        {(server.traffic_used_up !== undefined ||
+          server.traffic_used_down !== undefined) && (
+          <small>
+            ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
+            {bytes(server.traffic_used_down, false)}
+          </small>
+        )}
+        {server.period_start && server.period_end && (
+          <small>
+            {server.period_start} — {server.period_end}
+          </small>
+        )}
+        {!!server.traffic_limit && (
+          <div className="meter">
+            <i
+              style={{
+                width: `${pct(server.traffic_used, server.traffic_limit)}%`,
+              }}
+            />
+          </div>
+        )}
+      </button>
+      {open && <TrafficDialog server={server} close={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function TableRenewal({ server }: { server: ProbeServer }) {
+  if (!server.expires_at && server.renewal_price === undefined)
+    return <span className="dash">—</span>;
+  return (
+    <div className="table-renewal">
+      {server.expires_at &&
+        (server.provider_url ? (
+          <a
+            href={server.provider_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <CalendarClock size={13} /> {remainingDays(server.expires_at)}
+          </a>
+        ) : (
+          <span>
+            <CalendarClock size={13} /> {remainingDays(server.expires_at)}
+          </span>
+        ))}
+      {server.renewal_price !== undefined && (
+        <span>
+          <Wallet size={13} />
+          {server.renewal_price_cny !== undefined
+            ? `¥${server.renewal_price_cny.toFixed(2)}`
+            : `${server.renewal_currency || "CNY"} ${server.renewal_price}`}{" "}
+          / {cycleLabel[server.renewal_cycle || "month"]}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -1080,47 +1257,45 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
             <tr>
               <th>服务器</th>
               <th>状态</th>
-              <th>CPU</th>
-              <th>内存</th>
-              <th>硬盘</th>
+              <th>资源与流量</th>
               <th>网速</th>
-              <th>流量</th>
+              <th>累计流量</th>
               <th>延迟</th>
+              <th>三网回程</th>
             </tr>
           </thead>
           <tbody>
             {servers.map((server, index) => {
-              const memory = server.mem_total
-                ? pct(server.mem_used, server.mem_total)
-                : undefined;
-              const disk = server.disk_total
-                ? pct(server.disk_used, server.disk_total)
-                : undefined;
               return (
                 <tr key={`${server.name}-${index}`}>
                   <td className="table-name">
-                    <Twemoji>{server.name || `服务器 ${index + 1}`}</Twemoji>
-                    {server.region && <small>{server.region}</small>}
-                    {server.expires_at &&
-                      (server.provider_url ? (
+                    <span className="table-name-line">
+                      {server.provider_url ? (
                         <a
                           href={server.provider_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={expiring(server) ? "warning" : ""}
-                          title={
-                            server.provider_name
-                              ? `前往 ${server.provider_name} 续费`
-                              : "前往服务商续费"
-                          }
                         >
-                          {server.expires_at}
+                          <Twemoji>
+                            {regionFlag(server.region) &&
+                            !hasLeadingFlag(server.name || "")
+                              ? `${regionFlag(server.region)} ${server.name || `服务器 ${index + 1}`}`
+                              : server.name || `服务器 ${index + 1}`}
+                          </Twemoji>
                         </a>
                       ) : (
-                        <small className={expiring(server) ? "warning" : ""}>
-                          {server.expires_at}
-                        </small>
-                      ))}
+                        <Twemoji>
+                          {regionFlag(server.region) &&
+                          !hasLeadingFlag(server.name || "")
+                            ? `${regionFlag(server.region)} ${server.name || `服务器 ${index + 1}`}`
+                            : server.name || `服务器 ${index + 1}`}
+                        </Twemoji>
+                      )}
+                      <span title={systemTitle(server)}>
+                        <SystemIcon server={server} />
+                      </span>
+                    </span>
+                    <TableRenewal server={server} />
                   </td>
                   <td>
                     <span className="table-status">
@@ -1129,13 +1304,7 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                     </span>
                   </td>
                   <td>
-                    <TableMetric percent={server.cpu_pct} />
-                  </td>
-                  <td>
-                    <TableMetric percent={memory} />
-                  </td>
-                  <td>
-                    <TableMetric percent={disk} />
+                    <TableResources server={server} />
                   </td>
                   <td>
                     <span className="table-speed">
@@ -1150,25 +1319,28 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                     </span>
                   </td>
                   <td>
-                    <div className="table-traffic">
-                      <span>
-                        {server.traffic_limit
-                          ? `${bytes(server.traffic_used, false)} / ${bytes(server.traffic_limit, false)}`
-                          : bytes(server.traffic_used, false)}
+                    {server.cumulative_up !== undefined ||
+                    server.cumulative_down !== undefined ? (
+                      <span className="table-cumulative">
+                        <span>↑ {bytes(server.cumulative_up, false)}</span>
+                        <span>↓ {bytes(server.cumulative_down, false)}</span>
                       </span>
-                      {!!server.traffic_limit && (
-                        <div className="meter">
-                          <i
-                            style={{
-                              width: `${pct(server.traffic_used, server.traffic_limit)}%`,
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    ) : (
+                      <span className="dash">—</span>
+                    )}
                   </td>
                   <td>
                     <TablePing ping={server.ping} serverIndex={index} />
+                  </td>
+                  <td className="table-routes">
+                    {server.return_routes?.length ? (
+                      <ReturnRouteBadges
+                        routes={server.return_routes}
+                        telecomPaidPeer={server.telecom_paid_peer}
+                      />
+                    ) : (
+                      <span className="dash">—</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -1201,8 +1373,10 @@ function ProbeLicenseNameplate({
     if (!plate || !text || !stars || !shine) return;
 
     const palette = ["#f9a8d4", "#f472b6", "#ec4899", "#fbcfe8", "#ff8fc7"];
-    const random = (min: number, max: number) => min + Math.random() * (max - min);
-    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+    const random = (min: number, max: number) =>
+      min + Math.random() * (max - min);
+    const clamp = (value: number, min: number, max: number) =>
+      Math.max(min, Math.min(max, value));
     const easeOutBack = (value: number) => {
       const c1 = 1.70158;
       const c3 = c1 + 1;
@@ -1226,12 +1400,15 @@ function ProbeLicenseNameplate({
       star.style.left = `${Math.round(random(0, 12))}px`;
       stars.appendChild(star);
     };
-    for (let index = 0; index < 5; index++) makeStar((size) => random(0, Math.max(0, height - size)));
+    for (let index = 0; index < 5; index++)
+      makeStar((size) => random(0, Math.max(0, height - size)));
     makeStar((size) => -size * 0.6);
     makeStar((size) => height - size * 0.4);
 
     let width = plate.offsetWidth;
-    const updateWidth = () => { width = plate.offsetWidth; };
+    const updateWidth = () => {
+      width = plate.offsetWidth;
+    };
     window.addEventListener("resize", updateWidth);
     let frameID = 0;
     const start = performance.now();
@@ -1254,10 +1431,23 @@ function ProbeLicenseNameplate({
         scale = 1 - 0.14 * eased;
         opacity = clamp(1 - amount * 1.5, 0, 1);
       }
-      const starOpacity = progress < 0.04 ? progress / 0.04 : progress < 0.32 ? 1 : progress < 0.37 ? clamp(1 - (progress - 0.32) / 0.05, 0, 1) : 0;
+      const starOpacity =
+        progress < 0.04
+          ? progress / 0.04
+          : progress < 0.32
+            ? 1
+            : progress < 0.37
+              ? clamp(1 - (progress - 0.32) / 0.05, 0, 1)
+              : 0;
       const shineProgress = clamp((progress - 0.42) / 0.28, 0, 1);
       const shineActive = progress >= 0.42 && progress <= 0.7;
-      const shineOpacity = shineActive ? (shineProgress < 0.1 ? shineProgress / 0.1 : shineProgress > 0.85 ? clamp((1 - shineProgress) / 0.15, 0, 1) : 1) : 0;
+      const shineOpacity = shineActive
+        ? shineProgress < 0.1
+          ? shineProgress / 0.1
+          : shineProgress > 0.85
+            ? clamp((1 - shineProgress) / 0.15, 0, 1)
+            : 1
+        : 0;
 
       plate.style.opacity = String(opacity);
       plate.style.transform = `perspective(340px) rotateX(${rotateX.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
@@ -1278,7 +1468,9 @@ function ProbeLicenseNameplate({
   if (!label) return null;
   return (
     <span ref={plateRef} className="probe-license-nameplate">
-      <strong ref={textRef} className="probe-license-text">{label}</strong>
+      <strong ref={textRef} className="probe-license-text">
+        {label}
+      </strong>
       <span className="probe-license-shine-clip" aria-hidden="true">
         <span ref={shineRef} className="probe-license-shine" />
       </span>

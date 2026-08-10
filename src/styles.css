@@ -8,7 +8,7 @@
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
-    'Segoe UI',
+    "Segoe UI",
     sans-serif;
   color: #172033;
   background: #f5f7fb;
@@ -663,7 +663,7 @@ button {
 }
 .server-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1240px;
   border-collapse: collapse;
   text-align: left;
   font-size: 13px;
@@ -689,6 +689,7 @@ button {
   padding-right: 20px;
 }
 .table-name {
+  width: 210px;
   max-width: 210px;
   color: var(--foreground, #172033);
   font-size: 14px;
@@ -696,6 +697,28 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.table-name-line,
+.table-cumulative,
+.table-renewal,
+.table-renewal span,
+.table-renewal a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.table-name-line {
+  justify-content: space-between;
+}
+.table-cumulative,
+.table-renewal {
+  flex-direction: column;
+  align-items: flex-start;
+  white-space: nowrap;
+}
+.table-renewal a {
+  color: inherit;
+  text-decoration: none;
 }
 .table-status {
   display: inline-flex;
@@ -715,11 +738,49 @@ button {
 .table-metric {
   width: 115px;
 }
+.table-resources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 350px;
+  gap: 8px 16px;
+}
+.table-resource-row {
+  min-width: 0;
+}
+.table-resource-row .table-metric {
+  width: auto;
+}
+.table-resource-row .table-traffic {
+  width: auto;
+  max-width: 100%;
+}
 .table-metric > span,
 .table-traffic > span {
   display: block;
   margin-bottom: 5px;
   white-space: nowrap;
+}
+.table-metric-head {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.table-metric-head small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.table-name-line a {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+}
+.table-name-line a:hover {
+  color: var(--primary);
+  text-decoration: underline;
 }
 .table-metric .meter,
 .table-traffic .meter {
@@ -738,15 +799,66 @@ button {
   gap: 4px;
 }
 .table-traffic {
-  width: 145px;
+  width: 190px;
+}
+.table-traffic-button {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.table-traffic small {
+  display: block;
+  margin: 3px 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.table-routes {
+  min-width: 300px;
+}
+.table-routes .return-route-badges {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.metric-detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: left;
+}
+.cumulative-traffic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.cumulative-traffic span:last-child {
+  text-align: right;
 }
 .table-ping {
-  width: 165px;
+  width: 105px;
   padding: 0;
   border: 0;
   color: inherit;
   background: none;
   cursor: pointer;
+}
+.table-ping-pair {
+  display: grid;
+  grid-template-columns: repeat(2, 105px);
+  gap: 12px;
+}
+.table-ping small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
 }
 .table-ping > span {
   display: flex;
@@ -830,10 +942,12 @@ footer a:hover {
   transform-origin: center bottom;
   will-change: transform, opacity;
   padding: 0 13px;
-  border: 1px solid rgba(217, 119, 87, .45);
+  border: 1px solid rgba(217, 119, 87, 0.45);
   border-radius: 3px;
   background: linear-gradient(135deg, #2a2320 0%, #3f342c 48%, #241d1a 100%);
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .1);
+  box-shadow:
+    2px 2px 0 rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   color: #f4cd9c;
 }
 .probe-license-text {
@@ -845,7 +959,7 @@ footer a:hover {
   white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
   clip-path: inset(0 100% 0 0);
   will-change: clip-path;
 }
@@ -865,12 +979,14 @@ footer a:hover {
   position: absolute;
 }
 .probe-license-stars .spark::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>") center / contain no-repeat;
-  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>")
+    center / contain no-repeat;
   filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 7px currentColor);
 }
 .probe-license-shine-clip {
@@ -889,24 +1005,31 @@ footer a:hover {
   bottom: 0;
   left: 0;
   width: 45%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .62), transparent);
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.62),
+    transparent
+  );
   transform: skewX(-16deg);
   opacity: 0;
   will-change: transform, opacity;
 }
 :root.theme-flat .probe-license-nameplate {
-  border-color: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   background: linear-gradient(135deg, #3b4252, #4a5266);
   color: #eef2f8;
-  box-shadow: 0 2px 8px rgba(20, 30, 50, .18);
+  box-shadow: 0 2px 8px rgba(20, 30, 50, 0.18);
 }
 :root.theme-anime .probe-license-nameplate {
-  border-color: rgba(255, 255, 255, .28);
+  border-color: rgba(255, 255, 255, 0.28);
   border-radius: 0;
   background: linear-gradient(135deg, #7c3f9e 0%, #c94f9c 52%, #6a5ae0 100%);
   color: #fff5fb;
-  box-shadow: 0 2px 12px rgba(201, 79, 156, .32), inset 0 1px 0 rgba(255, 255, 255, .32);
+  box-shadow:
+    0 2px 12px rgba(201, 79, 156, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
 }
 .modal-backdrop {
   position: fixed;
@@ -960,17 +1083,52 @@ footer a:hover {
   max-width: 100%;
   height: 300px;
 }
-.chart-scroll-frame { position: relative; overflow: hidden; width: 100%; min-width: 0; max-width: 100%; height: 100%; }
-.chart-fixed-y-axis { pointer-events: none; position: absolute; inset: 0 auto 0 0; z-index: 2; overflow: hidden; width: 68px; background: var(--surface); }
+.chart-scroll-frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+}
+.chart-fixed-y-axis {
+  pointer-events: none;
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  overflow: hidden;
+  width: 68px;
+  background: var(--surface);
+}
 .chart-fixed-y-axis .recharts-xAxis,
 .chart-fixed-y-axis .recharts-cartesian-grid,
 .chart-fixed-y-axis .recharts-line,
-.chart-fixed-y-axis .recharts-tooltip-wrapper { display: none; }
-.chart-scroll { overflow-x: auto; overflow-y: hidden; width: 100%; min-width: 0; max-width: 100%; height: 100%; overscroll-behavior-x: contain; cursor: grab; user-select: none; scrollbar-width: thin; }
-.chart-scroll:active { cursor: grabbing; }
-.chart-scroll-inner { height: 100%; }
+.chart-fixed-y-axis .recharts-tooltip-wrapper {
+  display: none;
+}
+.chart-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+  overscroll-behavior-x: contain;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: thin;
+}
+.chart-scroll:active {
+  cursor: grabbing;
+}
+.chart-scroll-inner {
+  height: 100%;
+}
 @media (max-width: 640px) {
-  .modal { width: 90vw; padding: 18px 14px; }
+  .modal {
+    width: 90vw;
+    padding: 18px 14px;
+  }
 }
 .loading,
 .loading-overlay {
@@ -1058,12 +1216,12 @@ footer a:hover {
 }
 :root.theme-anime .server-card::after,
 :root.theme-anime .modal::after {
-  content: '';
+  content: "";
   pointer-events: none;
   position: absolute;
   inset: 4px;
   border: 19px solid transparent;
-  border-image: url('/anime-lace.svg') 30 round;
+  border-image: url("/anime-lace.svg") 30 round;
 }
 :root.theme-anime .summary-card {
   position: relative;
@@ -1074,12 +1232,12 @@ footer a:hover {
   box-shadow: 0 4px 18px -6px rgba(139, 92, 246, 0.28);
 }
 :root.theme-anime .summary-card::after {
-  content: '';
+  content: "";
   pointer-events: none;
   position: absolute;
   inset: 4px;
   border: 19px solid transparent;
-  border-image: url('/anime-lace.svg') 30 round;
+  border-image: url("/anime-lace.svg") 30 round;
 }
 :root.theme-anime .summary-card > * {
   position: relative;
@@ -1130,12 +1288,12 @@ footer a:hover {
   box-shadow: 0 4px 18px -6px rgba(139, 92, 246, 0.28);
 }
 :root.theme-anime .server-table-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 4px;
   pointer-events: none;
   border: 19px solid transparent;
-  border-image: url('/anime-lace.svg') 30 round;
+  border-image: url("/anime-lace.svg") 30 round;
 }
 .theme-anime .table-scroll {
   position: relative;
@@ -1233,7 +1391,7 @@ footer a:hover {
   opacity: 0.4;
 }
 .globe-ocean {
-  fill: url('#globe-ocean');
+  fill: url("#globe-ocean");
 }
 .globe-grid {
   fill: none;
@@ -1338,13 +1496,13 @@ footer a:hover {
   --globe-ocean-dark: #ddd0fa;
 }
 :root.theme-anime .globe-card::after {
-  content: '';
+  content: "";
   pointer-events: none;
   position: absolute;
   inset: 4px;
   z-index: 1;
   border: 19px solid transparent;
-  border-image: url('/anime-lace.svg') 30 round;
+  border-image: url("/anime-lace.svg") 30 round;
 }
 :root.theme-anime .globe-stage {
   z-index: 2;
@@ -1390,12 +1548,12 @@ footer a:hover {
   box-shadow: 0 4px 18px -6px rgba(139, 92, 246, 0.28);
 }
 :root.theme-anime .probe-toolbar::after {
-  content: '';
+  content: "";
   pointer-events: none;
   position: absolute;
   inset: 4px;
   border: 19px solid transparent;
-  border-image: url('/anime-lace.svg') 30 round;
+  border-image: url("/anime-lace.svg") 30 round;
 }
 :root.theme-anime .probe-toolbar .filters {
   position: relative;
