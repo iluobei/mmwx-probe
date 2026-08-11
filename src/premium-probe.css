@@ -18,6 +18,7 @@
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue',
     Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
     'Segoe UI Symbol';
+  font-synthesis: weight;
   background: radial-gradient(
     circle at 70% 12%,
     rgba(216, 180, 106, 0.07),

@@ -1,0 +1,42 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # 每天北京时间 11:23 检查更新，避开整点的 Actions 高峰。
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository != 'mmwx-group/mmwx-probe'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out user repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream updates
+        env:
+          UPSTREAM_REPOSITORY: mmwx-group/mmwx-probe
+          UPSTREAM_BRANCH: main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags upstream "${UPSTREAM_BRANCH}"
+
+          if git diff --quiet HEAD "upstream/${UPSTREAM_BRANCH}"; then
+            echo "Already up to date."
+            exit 0
+          fi
+
+          git merge --no-edit "upstream/${UPSTREAM_BRANCH}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

@@ -85,6 +85,7 @@ export interface ProbePayload {
   show_resource_heatmap?: boolean
   show_traffic_quota?: boolean
   show_renewal_timeline?: boolean
+  show_health_score?: boolean
   title?: string
   logo?: string
   appearance?: ProbeAppearance

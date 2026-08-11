@@ -131,7 +131,11 @@ npm run deploy     # 构建并部署到 Cloudflare Workers
 
 ## 更新与密钥轮换
 
-更新代码后执行 `npm ci && npm run deploy`。轮换密钥时，先在主控生成新密钥，立即执行 `npx wrangler secret put PROBE_TOKEN` 并重新部署；在 Worker 更新完成前，探针可能短暂返回 `404`。主控只保存密钥的 SHA-256 哈希，无法找回旧密钥。
+通过 Cloudflare 按钮创建的 GitHub 仓库内置“Sync upstream”工作流。启用后，它每天北京时间 11:23 检查 `mmwx-group/mmwx-probe` 的 `main` 分支，无冲突时自动合并并推送；Cloudflare Workers Builds 随后会自动重新部署。也可以在仓库的 **Actions → Sync upstream → Run workflow** 中立即检查更新。
+
+GitHub 会默认禁用公共 fork 中的定时工作流。首次部署后，请进入仓库的 **Actions** 页面启用工作流，并在 **Settings → Actions → General → Workflow permissions** 中确认允许 **Read and write permissions**。若用户分支与上游发生合并冲突，或分支保护禁止 GitHub Actions 推送，工作流会停止且不会覆盖用户更改，需要手动解决冲突。
+
+手动更新仍可执行 `npm ci && npm run deploy`。轮换密钥时，先在主控生成新密钥，立即执行 `npx wrangler secret put PROBE_TOKEN` 并重新部署；在 Worker 更新完成前，探针可能短暂返回 `404`。主控只保存密钥的 SHA-256 哈希，无法找回旧密钥。
 
 ## 故障排查
 
