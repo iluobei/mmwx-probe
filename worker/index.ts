@@ -26,6 +26,10 @@ function upstreamURL(request: Request, env: Env): URL | null {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const incoming = new URL(request.url)
+    if (incoming.pathname === '/login') {
+      return Response.redirect(new URL('/login', env.MMWX_ORIGIN).toString(), 302)
+    }
     const target = upstreamURL(request, env)
     if (!target) return env.ASSETS.fetch(request)
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 })

@@ -400,6 +400,7 @@ button {
   white-space: nowrap;
 }
 .metric-button {
+  position: relative;
   appearance: none;
   width: 100%;
   min-width: 0;
@@ -411,6 +412,34 @@ button {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.metric-hover-detail {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  z-index: 20;
+  display: none;
+  width: max-content;
+  max-width: 250px;
+  padding: 7px 10px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.metric-hover-detail small {
+  display: block;
+  font: inherit;
+}
+.metric-button:hover .metric-hover-detail,
+.metric-button:focus-visible .metric-hover-detail {
+  display: block;
 }
 .meter {
   height: 6px;
@@ -798,6 +827,11 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+.table-speed small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
 }
 .table-traffic {
   width: 190px;

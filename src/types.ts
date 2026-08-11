@@ -79,6 +79,12 @@ export interface ProbeReturnRoute {
 export interface ProbePayload {
   enabled: boolean
   show_globe?: boolean
+  show_daily_trend?: boolean
+  show_traffic_hotspots?: boolean
+  show_traffic_7d?: boolean
+  show_resource_heatmap?: boolean
+  show_traffic_quota?: boolean
+  show_renewal_timeline?: boolean
   title?: string
   logo?: string
   appearance?: ProbeAppearance

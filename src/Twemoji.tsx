@@ -3,7 +3,13 @@ import twemoji from 'twemoji'
 
 const TAIWAN_FLAG_CODE = '1f1f9-1f1fc'
 
-export const Twemoji = memo(function Twemoji({ children }: { children: React.ReactNode }) {
+export const Twemoji = memo(function Twemoji({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
   const html = useMemo(() => {
     const element = document.createElement('span')
     element.textContent = String(children || '')
@@ -18,5 +24,5 @@ export const Twemoji = memo(function Twemoji({ children }: { children: React.Rea
     })
     return element.innerHTML
   }, [children])
-  return <span dangerouslySetInnerHTML={{ __html: html }} />
+  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 })

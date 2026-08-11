@@ -68,6 +68,7 @@ import type {
 } from "./types";
 import { useProbe } from "./use-probe";
 import { Twemoji } from "./Twemoji";
+import { displayServerName } from "./server-name";
 import commonRouteAnimation from "./assets/return-route/common.json";
 import premiumRouteAnimation from "./assets/return-route/premium.json";
 
@@ -81,6 +82,11 @@ const colors = [
 ];
 const RegionGlobe = lazy(() =>
   import("./RegionGlobe").then((module) => ({ default: module.RegionGlobe })),
+);
+const PremiumProbePage = lazy(() =>
+  import("./PremiumProbePage").then((module) => ({
+    default: module.PremiumProbePage,
+  })),
 );
 const ranges = [
   {
@@ -243,10 +249,6 @@ function regionFlag(region?: string): string {
     ...[...country].map((char) => 0x1f1e6 + char.charCodeAt(0) - 65),
   );
 }
-function hasLeadingFlag(value: string): boolean {
-  return /^\p{Regional_Indicator}{2}/u.test(value.trim());
-}
-
 function SpeedSummary({
   label,
   value,
@@ -878,7 +880,7 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
         <span className={server.online ? "status online" : "status"} />
         <h2>
           <Twemoji>
-            {flag && !hasLeadingFlag(name) ? `${flag} ${name}` : name}
+            {displayServerName(name, `服务器 ${index + 1}`, flag)}
           </Twemoji>
         </h2>
         <span title={systemTitle(server)}>
@@ -935,16 +937,25 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
               />
             </div>
             {(server.traffic_used_up !== undefined ||
-              server.traffic_used_down !== undefined) && (
-              <small className="metric-detail">
-                ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
-                {bytes(server.traffic_used_down, false)}
-              </small>
-            )}
-            {server.period_start && server.period_end && (
-              <small className="metric-detail">
-                {server.period_start} — {server.period_end}
-              </small>
+              server.traffic_used_down !== undefined ||
+              (server.period_start && server.period_end)) && (
+              <span className="metric-hover-detail">
+                {(server.traffic_used_up !== undefined ||
+                  server.traffic_used_down !== undefined) && (
+                  <small>
+                    周期 ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
+                    {bytes(server.traffic_used_down, false)}
+                  </small>
+                )}
+                {server.period_start && server.period_end && (
+                  <small>
+                    {server.period_start} — {server.period_end}
+                  </small>
+                )}
+                {!!server.daily_traffic?.length && (
+                  <small>点击查看每日流量趋势</small>
+                )}
+              </span>
             )}
           </button>
         )}
@@ -1277,18 +1288,20 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                           rel="noopener noreferrer"
                         >
                           <Twemoji>
-                            {regionFlag(server.region) &&
-                            !hasLeadingFlag(server.name || "")
-                              ? `${regionFlag(server.region)} ${server.name || `服务器 ${index + 1}`}`
-                              : server.name || `服务器 ${index + 1}`}
+                            {displayServerName(
+                              server.name,
+                              `服务器 ${index + 1}`,
+                              regionFlag(server.region),
+                            )}
                           </Twemoji>
                         </a>
                       ) : (
                         <Twemoji>
-                          {regionFlag(server.region) &&
-                          !hasLeadingFlag(server.name || "")
-                            ? `${regionFlag(server.region)} ${server.name || `服务器 ${index + 1}`}`
-                            : server.name || `服务器 ${index + 1}`}
+                          {displayServerName(
+                            server.name,
+                            `服务器 ${index + 1}`,
+                            regionFlag(server.region),
+                          )}
                         </Twemoji>
                       )}
                       <span title={systemTitle(server)}>
@@ -1308,12 +1321,14 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                   </td>
                   <td>
                     <span className="table-speed">
-                      <span>
-                        <ArrowUp size={14} />
+                      <span aria-label={`上传 ${speed(server.upload_speed)}`}>
+                        <ArrowUp size={14} aria-hidden="true" />
+                        <small>上传</small>
                         {speed(server.upload_speed)}
                       </span>
-                      <span>
-                        <ArrowDown size={14} />
+                      <span aria-label={`下载 ${speed(server.download_speed)}`}>
+                        <ArrowDown size={14} aria-hidden="true" />
+                        <small>下载</small>
                         {speed(server.download_speed)}
                       </span>
                     </span>
@@ -1509,6 +1524,13 @@ export function App() {
       </main>
     );
   if (!data?.enabled) return <main className="center">探针尚未启用</main>;
+  if (data.appearance?.theme === "premium") {
+    return (
+      <Suspense fallback={<main className="center">正在加载 Premium 主题…</main>}>
+        <PremiumProbePage data={data} isLoading={false} isError={false} />
+      </Suspense>
+    );
+  }
   const title = data.title?.trim() || "服务器状态";
   const servers = data.servers || [];
   const onlineCount = servers.filter((server) => server.online).length;
