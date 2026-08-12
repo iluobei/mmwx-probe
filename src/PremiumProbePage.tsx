@@ -7,7 +7,6 @@ import {
   CreditCard,
   Globe2,
   Gauge,
-  LogIn,
   Radio,
   Server,
   ShieldCheck,
@@ -2229,9 +2228,6 @@ export function PremiumProbePage({
               <Gauge /> 资源概况
             </button>
           </div>
-          <a className='premium-probe-login' href='/login'>
-            <LogIn /> 登录
-          </a>
         </nav>
       </header>
 

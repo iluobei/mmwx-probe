@@ -255,8 +255,7 @@
   pointer-events: none;
 }
 
-.premium-probe-license-name,
-.premium-probe-login {
+.premium-probe-license-name {
   display: inline-flex;
   min-height: 32px;
   align-items: center;
@@ -267,22 +266,11 @@
   color: #cfc3a8;
   font-size: 0.72rem;
   font-weight: 650;
-  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
   border: 1px solid rgba(216, 180, 106, 0.32);
   border-radius: 0.48rem;
   background: rgba(9, 10, 9, 0.72);
-}
-
-.premium-probe-login:hover {
-  color: var(--pp-gold-bright);
-  border-color: rgba(242, 210, 139, 0.62);
-}
-
-.premium-probe-login svg {
-  width: 0.95rem;
-  height: 0.95rem;
 }
 
 .premium-probe-live {
