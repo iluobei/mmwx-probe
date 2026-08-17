@@ -34,10 +34,24 @@ export interface ProbeServer {
   traffic_used_down?: number
   traffic_used_total?: number
   traffic_limit?: number
+  traffic_source?: 'xray' | 'system'
+  traffic_stats_mode?: 'both' | 'upload' | 'download' | 'max'
+  traffic_adjustment?: number
+  traffic_used_scope?: 'configured_period' | 'counter_since_reset' | string
   period_start?: string
   period_end?: string
+  daily_traffic_scope?:
+    | 'configured_period_and_recent_7d'
+    | 'recent_7d'
+    | string
+  daily_traffic_start?: string
+  daily_traffic_end?: string
+  boot_traffic_up?: number
+  boot_traffic_down?: number
+  boot_traffic_scope?: 'current_boot' | string
   cumulative_up?: number
   cumulative_down?: number
+  cumulative_traffic_scope?: 'current_boot' | string
   daily_traffic?: Array<{
     date: string
     uplink: number

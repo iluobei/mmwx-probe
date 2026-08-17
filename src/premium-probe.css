@@ -2751,12 +2751,30 @@
 }
 
 .premium-probe-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
   margin-top: 0.8rem;
   padding: 4rem 1rem;
   color: #8f8776;
   text-align: center;
   border: 1px solid var(--pp-border);
   border-radius: 0.75rem;
+}
+
+.premium-probe-empty button {
+  padding: 0.55rem 0.9rem;
+  color: var(--pp-gold-bright);
+  border: 1px solid var(--pp-border-strong);
+  border-radius: 0.45rem;
+  background: rgba(216, 180, 106, 0.06);
+  cursor: pointer;
+}
+
+.premium-probe-empty button:hover {
+  border-color: var(--pp-gold);
+  background: rgba(216, 180, 106, 0.12);
 }
 
 .premium-probe-footer {
@@ -2886,6 +2904,80 @@
   margin-bottom: 0.55rem;
   color: #dcd1bb;
   font-size: 0.74rem;
+}
+
+.premium-probe-traffic-accounting {
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(216, 180, 106, 0.14);
+  background: rgba(216, 180, 106, 0.025);
+}
+
+.premium-probe-traffic-accounting > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.18rem;
+}
+
+.premium-probe-traffic-accounting span,
+.premium-probe-traffic-accounting p,
+.premium-probe-traffic-note {
+  margin: 0;
+  color: #827a6c;
+  font-size: 0.6rem;
+  line-height: 1.45;
+}
+
+.premium-probe-traffic-accounting strong {
+  color: #dfc47e;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.premium-probe-traffic-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.45rem;
+}
+
+.premium-probe-traffic-heading h3 {
+  margin: 0;
+}
+
+.premium-probe-traffic-heading > div {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid rgba(216, 180, 106, 0.18);
+  border-radius: 0.25rem;
+}
+
+.premium-probe-traffic-heading button {
+  padding: 0.28rem 0.42rem;
+  color: #827a6c;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.56rem;
+  cursor: pointer;
+}
+
+.premium-probe-traffic-heading button + button {
+  border-left: 1px solid rgba(216, 180, 106, 0.18);
+}
+
+.premium-probe-traffic-heading button.is-active {
+  color: #17130d;
+  background: #d8b46a;
+}
+
+.premium-probe-traffic-note {
+  margin-bottom: 0.45rem;
 }
 
 .premium-probe-drawer-traffic > div {

@@ -22,6 +22,21 @@ import type {
 import { Twemoji } from './Twemoji'
 import { FLAG_OPTIONS } from './country-flag'
 import { displayServerName } from './server-name'
+import {
+  billableTraffic,
+  bootTraffic,
+  dailyTrafficRows,
+  hasTrafficPeriod,
+  trafficFormulaLabel,
+  trafficRuleLabel,
+  trafficUsageLabel,
+  type TrafficRange,
+} from './traffic-display'
+import {
+  clearServerDetail,
+  openServerDetail,
+  readServerDetailRoute,
+} from './server-detail-route'
 import { BlackGoldGlobe, type PremiumProbeRegion } from './BlackGoldGlobe'
 import './premium-probe.css'
 
@@ -167,6 +182,11 @@ function formatTrafficCompact(value = 0): string {
   return `${size.toFixed(digits)} ${units[index]}`
 }
 
+function formatSignedTraffic(value: number): string {
+  if (value === 0) return formatTrafficCompact(0)
+  return `${value > 0 ? '+' : '−'}${formatTrafficCompact(Math.abs(value))}`
+}
+
 type PremiumProbePageProps = {
   data?: ProbeData
   isLoading: boolean
@@ -310,17 +330,17 @@ function resourcePercentage(used?: number, total?: number): number | undefined {
 
 function serverRegionKey(server: ProbeServer): string {
   return (
-    server.region_country ||
+    flagToCountryCode(server.region_country) ||
     flagToCountryCode(server.region) ||
-    server.region?.trim() ||
     'UNKNOWN'
-  ).toUpperCase()
+  )
 }
 
 function buildRegions(servers: ProbeServer[]): PremiumProbeRegion[] {
   const groups = new Map<string, ProbeServer[]>()
   for (const server of servers) {
     const key = serverRegionKey(server)
+    if (key === 'UNKNOWN') continue
     const group = groups.get(key) || []
     group.push(server)
     groups.set(key, group)
@@ -388,7 +408,7 @@ function serverHealth(server: ProbeServer): HealthResult {
     issues.push('存在丢包')
   }
   if (server.traffic_limit) {
-    const used = server.traffic_used ?? server.traffic_used_total ?? 0
+    const used = billableTraffic(server) ?? 0
     const quota = percentage(used, server.traffic_limit)
     if (quota >= 95) {
       score -= 16
@@ -470,7 +490,7 @@ function trafficQuotaRows(servers: ProbeServer[]) {
     .map((server, index) => ({
       index,
       name: server.name || `#${index + 1}`,
-      used: server.traffic_used ?? server.traffic_used_total ?? 0,
+      used: billableTraffic(server) ?? 0,
       limit: server.traffic_limit || 0,
     }))
     .filter((item) => item.limit > 0)
@@ -736,7 +756,7 @@ function DataInsightPanels({
         <article className='premium-probe-insight-card'>
           <header>
             <h3>
-              <Activity />近 7 日上下行流量
+              <Activity />近 7 日原始上下行流量
             </h3>
             <span>
               <i className='is-down' />
@@ -1122,7 +1142,7 @@ function DailyTrafficTrend({ servers }: { servers: ProbeServer[] }) {
       className='premium-probe-overview-chart-card premium-probe-daily-trend'
     >
       <div className='premium-probe-overview-chart-heading'>
-        <span>每日流量趋势</span>
+        <span>原始上下行日流量趋势</span>
         <strong>
           今日 {latest ? formatTrafficCompact(latest.total) : '—'}
         </strong>
@@ -1793,11 +1813,7 @@ function PremiumServerCard({
 }) {
   const mem = resourcePercentage(server.mem_used, server.mem_total)
   const disk = resourcePercentage(server.disk_used, server.disk_total)
-  const trafficUsed =
-    server.traffic_used_total ??
-    server.traffic_used ??
-    server.traffic_used_up ??
-    0
+  const trafficUsed = billableTraffic(server) ?? server.traffic_used_up ?? 0
   const trafficValue = server.traffic_limit
     ? `${formatTrafficCompact(trafficUsed)} / ${formatTrafficCompact(server.traffic_limit)}`
     : formatTrafficCompact(trafficUsed)
@@ -1811,7 +1827,10 @@ function PremiumServerCard({
   const code = serverRegionKey(server)
   const flag = countryFlag(code) || server.region || ''
   const health = serverHealth(server)
-  const dailyTraffic = (server.daily_traffic || []).slice(-14)
+  const dailyTraffic = dailyTrafficRows(
+    server,
+    hasTrafficPeriod(server) ? 'period' : 'recent7'
+  )
   const maxDailyTraffic = Math.max(
     1,
     ...dailyTraffic.map((day) => day.total || day.uplink + day.downlink)
@@ -1886,9 +1905,9 @@ function PremiumServerCard({
       </div>
       <div className='premium-probe-server-footer'>
         <div className='premium-probe-card-traffic'>
-          <span>周期流量</span>
+          <span>{trafficUsageLabel(server)}</span>
           <strong>{trafficValue}</strong>
-          <i aria-label='每日流量柱状图'>
+          <i aria-label='原始上下行每日流量柱状图'>
             {dailyTraffic.map((day) => {
               const total = day.total || day.uplink + day.downlink
               return (
@@ -1902,7 +1921,12 @@ function PremiumServerCard({
               )
             })}
           </i>
-          <small>近 {dailyTraffic.length} 日</small>
+          <small
+            title={`计费规则：${trafficRuleLabel(server)}；柱状图为原始上下行，不应用计费方向或对账调整`}
+          >
+            {hasTrafficPeriod(server) ? '周期' : '近 7 日'}原始趋势 ·{' '}
+            {trafficRuleLabel(server)}
+          </small>
         </div>
         <div className='premium-probe-card-latency'>
           <span>当前延迟</span>
@@ -1930,8 +1954,19 @@ function ServerDetailDrawer({
   const mem = resourcePercentage(server.mem_used, server.mem_total)
   const disk = resourcePercentage(server.disk_used, server.disk_total)
   const latency = averageLatency(server)
-  const traffic = summarizeSevenDayTraffic([server])
+  const hasPeriod = hasTrafficPeriod(server)
+  const [trafficRange, setTrafficRange] = useState<TrafficRange>(() =>
+    hasPeriod ? 'period' : 'recent7'
+  )
+  const traffic = dailyTrafficRows(server, trafficRange).map((item) => ({
+    ...item,
+    total: item.total || item.uplink + item.downlink,
+  }))
   const maxTraffic = Math.max(1, ...traffic.map((item) => item.total))
+  const trafficUsed = billableTraffic(server)
+  const currentBoot = bootTraffic(server)
+  const formula = trafficFormulaLabel(server)
+  const flag = countryFlag(serverRegionKey(server)) || server.region || ''
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
     window.addEventListener('keydown', close)
@@ -1948,7 +1983,9 @@ function ServerDetailDrawer({
           <div>
             <Twemoji>{localizedRegionLabel(server)}</Twemoji>
             <h2>
-              <Twemoji>{server.name || `#${index + 1}`}</Twemoji>
+              <Twemoji>
+                {displayServerName(server.name, `#${index + 1}`, flag)}
+              </Twemoji>
             </h2>
           </div>
           <button type='button' onClick={onClose} aria-label='关闭详情'>
@@ -1981,22 +2018,91 @@ function ServerDetailDrawer({
           </div>
         </div>
         <section className='premium-probe-drawer-section'>
-          <h3>近 7 日流量</h3>
+          <h3>流量统计口径</h3>
+          <div className='premium-probe-traffic-accounting'>
+            <div>
+              <span>{trafficUsageLabel(server)}</span>
+              <strong>
+                {trafficUsed === undefined
+                  ? '—'
+                  : server.traffic_limit
+                    ? `${formatTrafficCompact(trafficUsed)} / ${formatTrafficCompact(server.traffic_limit)}`
+                    : formatTrafficCompact(trafficUsed)}
+              </strong>
+            </div>
+            <p>计费规则：{trafficRuleLabel(server)}</p>
+            {formula && <p>计费用量 = {formula}</p>}
+            {(server.traffic_used_up !== undefined ||
+              server.traffic_used_down !== undefined) && (
+              <p>
+                原始周期 ↑ {formatTrafficCompact(server.traffic_used_up)} · ↓{' '}
+                {formatTrafficCompact(server.traffic_used_down)}
+              </p>
+            )}
+            {server.traffic_adjustment !== undefined &&
+              server.traffic_adjustment !== 0 && (
+                <p>
+                  对账调整：{formatSignedTraffic(server.traffic_adjustment)}
+                </p>
+              )}
+            {(currentBoot.uplink !== undefined ||
+              currentBoot.downlink !== undefined) && (
+              <p>
+                本次开机网卡 ↑ {formatTrafficCompact(currentBoot.uplink)} · ↓{' '}
+                {formatTrafficCompact(currentBoot.downlink)}
+              </p>
+            )}
+            {server.period_start && server.period_end && (
+              <p>
+                计费周期：{server.period_start} — {server.period_end}
+              </p>
+            )}
+          </div>
+        </section>
+        <section className='premium-probe-drawer-section'>
+          <div className='premium-probe-traffic-heading'>
+            <h3>原始上下行日流量</h3>
+            <div role='group' aria-label='趋势范围'>
+              {hasPeriod && (
+                <button
+                  type='button'
+                  className={trafficRange === 'period' ? 'is-active' : ''}
+                  onClick={() => setTrafficRange('period')}
+                >
+                  当前周期
+                </button>
+              )}
+              <button
+                type='button'
+                className={trafficRange === 'recent7' ? 'is-active' : ''}
+                onClick={() => setTrafficRange('recent7')}
+              >
+                最近 7 日
+              </button>
+            </div>
+          </div>
+          <p className='premium-probe-traffic-note'>
+            以下为原始上、下行，不应用计费方向或对账调整。
+          </p>
           <div className='premium-probe-drawer-traffic'>
-            {traffic.map((item) => (
-              <div key={item.date}>
-                <span>{item.date.slice(5)}</span>
-                <i>
-                  <b
-                    style={{ width: `${(item.downlink / maxTraffic) * 100}%` }}
-                  />
-                  <b
-                    style={{ width: `${(item.uplink / maxTraffic) * 100}%` }}
-                  />
-                </i>
-                <strong>{formatTrafficCompact(item.total)}</strong>
-              </div>
-            ))}
+            {traffic.length === 0 ? (
+              <p>暂无每日流量数据</p>
+            ) : (
+              traffic.map((item) => (
+                <div key={item.date}>
+                  <span>{item.date.slice(5)}</span>
+                  <i>
+                    <b
+                      style={{ width: `${(item.downlink / maxTraffic) * 100}%` }}
+                    />
+                    <b
+                      style={{ width: `${(item.uplink / maxTraffic) * 100}%` }}
+                    />
+                  </i>
+                  <strong>{formatTrafficCompact(item.total)}</strong>
+                </div>
+              ))
+            )}
           </div>
         </section>
         <section className='premium-probe-drawer-section'>
@@ -2093,7 +2199,7 @@ export function PremiumProbePage({
   )
   const [status, setStatus] = useState<StatusFilter>('all')
   const [region, setRegion] = useState('all')
-  const [selectedServer, setSelectedServer] = useState<number>()
+  const [serverRoute, setServerRoute] = useState(readServerDetailRoute)
   const [view, setView] = useState<PremiumProbeView>(() => {
     if (typeof window === 'undefined') return 'card'
     const saved = localStorage.getItem('premium-probe-view')
@@ -2104,6 +2210,12 @@ export function PremiumProbePage({
     download: TrendSample[]
     upload: TrendSample[]
   }>({ download: [], upload: [] })
+
+  useEffect(() => {
+    const syncRoute = () => setServerRoute(readServerDetailRoute())
+    window.addEventListener('hashchange', syncRoute)
+    return () => window.removeEventListener('hashchange', syncRoute)
+  }, [])
 
   useEffect(() => {
     if (!data || sampledPayload.current === data) return
@@ -2164,20 +2276,55 @@ export function PremiumProbePage({
     trafficQuota: data?.show_traffic_quota !== false,
     renewalTimeline: data?.show_renewal_timeline !== false,
   }
-  const visibleServers = servers.filter((server) => {
-    const statusMatches =
-      status === 'all' ||
-      (status === 'online' && server.online) ||
-      (status === 'offline' && !server.online)
-    return (
-      statusMatches && (region === 'all' || serverRegionKey(server) === region)
-    )
-  })
+  const visibleServers = servers
+    .map((server, index) => ({ server, index }))
+    .filter(({ server }) => {
+      const statusMatches =
+        status === 'all' ||
+        (status === 'online' && server.online) ||
+        (status === 'offline' && !server.online)
+      return (
+        statusMatches &&
+        (region === 'all' || serverRegionKey(server) === region)
+      )
+    })
 
+  const selectStatus = (next: StatusFilter) => {
+    setStatus(next)
+    setRegion('all')
+  }
+  const selectRegion = (next: string) => {
+    setRegion(next)
+    setStatus('all')
+  }
+  const clearFilters = () => {
+    setStatus('all')
+    setRegion('all')
+  }
   const changeView = (next: PremiumProbeView) => {
     setView(next)
+    clearServerDetail()
+    setServerRoute({ kind: 'none' })
     localStorage.setItem('premium-probe-view', next)
   }
+  const showServerDetail = (index: number) => {
+    openServerDetail(index)
+    setServerRoute({ kind: 'server', index })
+  }
+  const closeServerDetail = () => {
+    clearServerDetail()
+    setServerRoute({ kind: 'none' })
+  }
+  const selectedServerIndex =
+    serverRoute.kind === 'server' && serverRoute.index < servers.length
+      ? serverRoute.index
+      : undefined
+  const serverRouteError =
+    serverRoute.kind === 'invalid'
+      ? '节点详情参数错误'
+      : serverRoute.kind === 'server' && serverRoute.index >= servers.length
+        ? '节点不存在'
+        : ''
   const pageTitle = data?.title?.trim() || '服务器状态'
   const logo = data?.logo?.trim() || ''
 
@@ -2233,15 +2380,17 @@ export function PremiumProbePage({
 
       <main>
         {view === 'network' ? (
-          <PremiumNetworkView servers={servers} />
+          <PremiumNetworkView key='network' servers={servers} />
         ) : view === 'resource' ? (
           <PremiumResourceOverview
+            key='resource'
             servers={servers}
             visibility={insightVisibility}
           />
         ) : (
           <>
             <section
+              key='card'
               className={cn(
                 'premium-probe-hero',
                 !showGlobe && 'without-globe',
@@ -2276,7 +2425,7 @@ export function PremiumProbePage({
                     <button
                       type='button'
                       key={item.key}
-                      onClick={() => setStatus(item.key)}
+                      onClick={() => selectStatus(item.key)}
                     >
                       <strong>{item.value}</strong>
                       <span>
@@ -2284,7 +2433,7 @@ export function PremiumProbePage({
                       </span>
                     </button>
                   ))}
-                  <button type='button' onClick={() => setRegion('all')}>
+                  <button type='button' onClick={clearFilters}>
                     <strong>{regions.length}</strong>
                     <span>
                       <Globe2 /> 个地区
@@ -2329,7 +2478,7 @@ export function PremiumProbePage({
                         <button
                           type='button'
                           key={item.code}
-                          onClick={() => setRegion(item.code)}
+                          onClick={() => selectRegion(item.code)}
                         >
                           <Twemoji>{item.label}</Twemoji>
                           <i
@@ -2361,7 +2510,7 @@ export function PremiumProbePage({
                     type='button'
                     key={key}
                     className={status === key ? 'is-active' : undefined}
-                    onClick={() => setStatus(key as StatusFilter)}
+                    onClick={() => selectStatus(key as StatusFilter)}
                   >
                     {label}
                   </button>
@@ -2370,7 +2519,7 @@ export function PremiumProbePage({
                   <Globe2 />
                   <select
                     value={region}
-                    onChange={(event) => setRegion(event.target.value)}
+                    onChange={(event) => selectRegion(event.target.value)}
                   >
                     <option value='all'>全部地区</option>
                     {regions.map((item) => (
@@ -2384,16 +2533,19 @@ export function PremiumProbePage({
 
               {visibleServers.length === 0 ? (
                 <div className='premium-probe-empty'>
-                  暂无符合筛选条件的服务器
+                  <span>暂无符合筛选条件的服务器</span>
+                  <button type='button' onClick={clearFilters}>
+                    查看全部
+                  </button>
                 </div>
               ) : (
                 <div className='premium-probe-card-grid'>
-                  {visibleServers.map((server, index) => (
+                  {visibleServers.map(({ server, index }) => (
                     <PremiumServerCard
                       server={server}
                       index={index}
                       key={`${server.name || 'server'}-${index}`}
-                      onOpen={() => setSelectedServer(index)}
+                      onOpen={() => showServerDetail(index)}
                       showHealthScore={data?.show_health_score === true}
                     />
                   ))}
@@ -2404,12 +2556,43 @@ export function PremiumProbePage({
         )}
       </main>
 
-      {selectedServer !== undefined && servers[selectedServer] && (
+      {selectedServerIndex !== undefined && servers[selectedServerIndex] && (
         <ServerDetailDrawer
-          server={servers[selectedServer]}
-          index={selectedServer}
-          onClose={() => setSelectedServer(undefined)}
+          key={selectedServerIndex}
+          server={servers[selectedServerIndex]}
+          index={selectedServerIndex}
+          onClose={closeServerDetail}
         />
+      )}
+
+      {serverRouteError && (
+        <div className='premium-probe-drawer-layer'>
+          <aside className='premium-probe-drawer' role='alert'>
+            <header>
+              <div>
+                <span>节点详情</span>
+                <h2>{serverRouteError}</h2>
+              </div>
+              <button
+                type='button'
+                onClick={closeServerDetail}
+                aria-label='关闭'
+              >
+                <X />
+              </button>
+            </header>
+            <div className='premium-probe-empty'>
+              <span>
+                {serverRoute.kind === 'invalid'
+                  ? '链接中的节点编号必须是非负整数。'
+                  : `没有编号为 ${serverRoute.kind === 'server' ? serverRoute.index : ''} 的公开节点。`}
+              </span>
+              <button type='button' onClick={closeServerDetail}>
+                返回节点列表
+              </button>
+            </div>
+          </aside>
+        </div>
       )}
 
       <footer className='premium-probe-footer'>

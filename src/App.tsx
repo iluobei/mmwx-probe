@@ -69,6 +69,16 @@ import type {
 import { useProbe } from "./use-probe";
 import { Twemoji } from "./Twemoji";
 import { displayServerName } from "./server-name";
+import {
+  billableTraffic,
+  bootTraffic,
+  dailyTrafficRows,
+  hasTrafficPeriod,
+  trafficFormulaLabel,
+  trafficRuleLabel,
+  trafficUsageLabel,
+  type TrafficRange,
+} from "./traffic-display";
 import commonRouteAnimation from "./assets/return-route/common.json";
 import premiumRouteAnimation from "./assets/return-route/premium.json";
 
@@ -176,6 +186,11 @@ function bytes(value = 0, decimal = true): string {
   return `${n.toFixed(decimal && i >= 2 ? 1 : 0)} ${units[i]}`;
 }
 
+function signedBytes(value: number): string {
+  if (value === 0) return bytes(0, false);
+  return `${value > 0 ? "+" : "−"}${bytes(Math.abs(value), false)}`;
+}
+
 function speed(value = 0): string {
   return `${bytes(value)}/s`;
 }
@@ -249,6 +264,25 @@ function regionFlag(region?: string): string {
     ...[...country].map((char) => 0x1f1e6 + char.charCodeAt(0) - 65),
   );
 }
+function countryCodeFromRegion(value?: string): string {
+  const text = value?.trim() || "";
+  const flag = text.match(/[\u{1F1E6}-\u{1F1FF}]{2}/u)?.[0];
+  if (flag) {
+    return [...flag]
+      .map((char) =>
+        String.fromCharCode((char.codePointAt(0) || 0) - 0x1f1e6 + 65),
+      )
+      .join("");
+  }
+  const code = text.split(/[·,\s]+/)[0]?.toUpperCase() || "";
+  return /^[A-Z]{2}$/.test(code) ? code : "";
+}
+function probeCountryCode(server: ProbeServer): string {
+  return (
+    countryCodeFromRegion(server.region_country) ||
+    countryCodeFromRegion(server.region)
+  );
+}
 function SpeedSummary({
   label,
   value,
@@ -313,67 +347,109 @@ function TrafficDialog({
   server: ProbeServer;
   close: () => void;
 }) {
-  const rows = server.daily_traffic || [];
+  const hasPeriod = hasTrafficPeriod(server);
+  const [range, setRange] = useState<TrafficRange>(() =>
+    hasPeriod ? "period" : "recent7",
+  );
+  const rows = dailyTrafficRows(server, range);
+  const total = rows.reduce(
+    (sum, row) => sum + (row.total || row.uplink + row.downlink),
+    0,
+  );
+  const formula = trafficFormulaLabel(server);
   return createPortal(
     <div className="modal-backdrop" role="presentation" onMouseDown={close}>
       <section className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <header>
-          <h2>{server.name} · 日流量趋势</h2>
-          <button aria-label="关闭" onClick={close}>
+          <h2>{server.name} · 原始上下行日流量趋势</h2>
+          <button type="button" aria-label="关闭" onClick={close}>
             ×
           </button>
         </header>
-        <div className="chart">
-          <HorizontalChart width={Math.max(760, rows.length * 82)}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={rows}
-                margin={{ top: 8, right: 12, bottom: 0, left: 8 }}
+        <div className="traffic-dialog-toolbar">
+          <div className="traffic-range" role="group" aria-label="趋势范围">
+            {hasPeriod && (
+              <button
+                type="button"
+                className={range === "period" ? "active" : ""}
+                onClick={() => setRange("period")}
               >
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval={0}
-                  minTickGap={28}
-                />
-                <YAxis
-                  width={62}
-                  tick={{ fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) => bytes(Number(value), false)}
-                />
-                <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8 }}
-                  labelFormatter={(value) => String(value)}
-                  formatter={(value, name) => [
-                    bytes(Number(value)),
-                    name === "uplink" || name === "上行" ? "上行" : "下行",
-                  ]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="uplink"
-                  name="上行"
-                  stroke="#f97316"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="downlink"
-                  name="下行"
-                  stroke="#22c55e"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </HorizontalChart>
+                当前周期
+              </button>
+            )}
+            <button
+              type="button"
+              className={range === "recent7" ? "active" : ""}
+              onClick={() => setRange("recent7")}
+            >
+              最近 7 日
+            </button>
+          </div>
+          <strong>
+            {range === "period" ? "当前周期" : "最近 7 日"}原始合计：
+            {bytes(total, false)}
+          </strong>
+          <small>
+            趋势展示原始上、下行，不应用计费方向或对账调整；卡片按
+            {trafficRuleLabel(server)}计费
+            {formula ? `（${formula}）` : ""}。
+          </small>
+        </div>
+        <div className="chart">
+          {rows.length === 0 ? (
+            <div className="empty traffic-empty">暂无每日流量趋势数据</div>
+          ) : (
+            <HorizontalChart width={Math.max(760, rows.length * 82)}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={rows}
+                  margin={{ top: 8, right: 12, bottom: 0, left: 8 }}
+                >
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    minTickGap={28}
+                  />
+                  <YAxis
+                    width={62}
+                    tick={{ fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => bytes(Number(value), false)}
+                  />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                    labelFormatter={(value) => String(value)}
+                    formatter={(value, name) => [
+                      bytes(Number(value)),
+                      name === "uplink" || name === "上行" ? "上行" : "下行",
+                    ]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="uplink"
+                    name="上行"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="downlink"
+                    name="下行"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </HorizontalChart>
+          )}
         </div>
       </section>
     </div>,
@@ -873,7 +949,10 @@ function ReturnRouteBadges({
 function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const name = server.name || `服务器 ${index + 1}`;
-  const flag = regionFlag(server.region);
+  const flag = regionFlag(server.region_country || server.region);
+  const trafficUsed = billableTraffic(server);
+  const currentBoot = bootTraffic(server);
+  const formula = trafficFormulaLabel(server);
   return (
     <article className="server-card">
       <div className="server-title">
@@ -912,7 +991,7 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
             percent={pct(server.disk_used, server.disk_total)}
           />
         )}
-        {server.traffic_used !== undefined && (
+        {trafficUsed !== undefined && (
           <button
             type="button"
             className="metric metric-button"
@@ -921,42 +1000,46 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
             <div className="metric-head">
               <span>
                 <PieChart size={14} />
-                流量
+                {trafficUsageLabel(server)}
               </span>
               <strong>
                 {server.traffic_limit
-                  ? `${bytes(server.traffic_used, false)} / ${bytes(server.traffic_limit, false)}`
-                  : bytes(server.traffic_used, false)}
+                  ? `${bytes(trafficUsed, false)} / ${bytes(server.traffic_limit, false)}`
+                  : bytes(trafficUsed, false)}
               </strong>
             </div>
             <div className="meter">
               <i
                 style={{
-                  width: `${pct(server.traffic_used, server.traffic_limit)}%`,
+                  width: `${pct(trafficUsed, server.traffic_limit)}%`,
                 }}
               />
             </div>
-            {(server.traffic_used_up !== undefined ||
-              server.traffic_used_down !== undefined ||
-              (server.period_start && server.period_end)) && (
-              <span className="metric-hover-detail">
-                {(server.traffic_used_up !== undefined ||
-                  server.traffic_used_down !== undefined) && (
+            <span className="metric-hover-detail">
+              <small>计费规则：{trafficRuleLabel(server)}</small>
+              {formula && <small>计费用量 = {formula}</small>}
+              {(server.traffic_used_up !== undefined ||
+                server.traffic_used_down !== undefined) && (
+                <small>
+                  原始周期 ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
+                  {bytes(server.traffic_used_down, false)}
+                </small>
+              )}
+              {server.traffic_adjustment !== undefined &&
+                server.traffic_adjustment !== 0 && (
                   <small>
-                    周期 ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
-                    {bytes(server.traffic_used_down, false)}
+                    对账调整：{signedBytes(server.traffic_adjustment)}
                   </small>
                 )}
-                {server.period_start && server.period_end && (
-                  <small>
-                    {server.period_start} — {server.period_end}
-                  </small>
-                )}
-                {!!server.daily_traffic?.length && (
-                  <small>点击查看每日流量趋势</small>
-                )}
-              </span>
-            )}
+              {server.period_start && server.period_end && (
+                <small>
+                  {server.period_start} — {server.period_end}
+                </small>
+              )}
+              {!!server.daily_traffic?.length && (
+                <small>点击查看原始上下行趋势</small>
+              )}
+            </span>
           </button>
         )}
       </div>
@@ -973,11 +1056,12 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
           </span>
         </div>
       )}
-      {(server.cumulative_up !== undefined ||
-        server.cumulative_down !== undefined) && (
+      {(currentBoot.uplink !== undefined ||
+        currentBoot.downlink !== undefined) && (
         <div className="cumulative-traffic">
-          <span>↓ {bytes(server.cumulative_down, false)}</span>
-          <span>↑ {bytes(server.cumulative_up, false)}</span>
+          <small>本次开机网卡</small>
+          <span>↓ {bytes(currentBoot.downlink, false)}</span>
+          <span>↑ {bytes(currentBoot.uplink, false)}</span>
         </div>
       )}
       {!!server.ping?.length && (
@@ -1074,7 +1158,7 @@ function TableResources({ server }: { server: ProbeServer }) {
         <TableMetric label="硬盘" percent={disk} />
       </div>
       <div className="table-resource-row">
-        <TableTraffic server={server} label="流量" />
+        <TableTraffic server={server} label={trafficUsageLabel(server)} />
       </div>
     </div>
   );
@@ -1184,29 +1268,37 @@ function TableTraffic({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
-  if (server.traffic_used === undefined) return <span className="dash">—</span>;
+  const trafficUsed = billableTraffic(server);
+  const formula = trafficFormulaLabel(server);
+  if (trafficUsed === undefined) return <span className="dash">—</span>;
   return (
     <>
       <button
         type="button"
         className="table-traffic table-traffic-button"
-        onClick={() => server.daily_traffic?.length && setOpen(true)}
+        onClick={() => setOpen(true)}
       >
         <span className="table-metric-head">
-          {label && <small>{label}</small>}
+          <small>{label || trafficUsageLabel(server)}</small>
           <span>
             {server.traffic_limit
-              ? `${bytes(server.traffic_used, false)} / ${bytes(server.traffic_limit, false)}`
-              : bytes(server.traffic_used, false)}
+              ? `${bytes(trafficUsed, false)} / ${bytes(server.traffic_limit, false)}`
+              : bytes(trafficUsed, false)}
           </span>
         </span>
+        <small>计费规则：{trafficRuleLabel(server)}</small>
+        {formula && <small>计费用量 = {formula}</small>}
         {(server.traffic_used_up !== undefined ||
           server.traffic_used_down !== undefined) && (
           <small>
-            ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
+            原始周期 ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
             {bytes(server.traffic_used_down, false)}
           </small>
         )}
+        {server.traffic_adjustment !== undefined &&
+          server.traffic_adjustment !== 0 && (
+            <small>对账调整：{signedBytes(server.traffic_adjustment)}</small>
+          )}
         {server.period_start && server.period_end && (
           <small>
             {server.period_start} — {server.period_end}
@@ -1216,7 +1308,7 @@ function TableTraffic({
           <div className="meter">
             <i
               style={{
-                width: `${pct(server.traffic_used, server.traffic_limit)}%`,
+                width: `${pct(trafficUsed, server.traffic_limit)}%`,
               }}
             />
           </div>
@@ -1224,6 +1316,22 @@ function TableTraffic({
       </button>
       {open && <TrafficDialog server={server} close={() => setOpen(false)} />}
     </>
+  );
+}
+
+function TableBootTraffic({ server }: { server: ProbeServer }) {
+  const currentBoot = bootTraffic(server);
+  if (
+    currentBoot.uplink === undefined &&
+    currentBoot.downlink === undefined
+  ) {
+    return <span className="dash">—</span>;
+  }
+  return (
+    <span className="table-cumulative">
+      <span>↑ {bytes(currentBoot.uplink, false)}</span>
+      <span>↓ {bytes(currentBoot.downlink, false)}</span>
+    </span>
   );
 }
 
@@ -1270,7 +1378,7 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
               <th>状态</th>
               <th>资源与流量</th>
               <th>网速</th>
-              <th>累计流量</th>
+              <th>本次开机网卡</th>
               <th>延迟</th>
               <th>三网回程</th>
             </tr>
@@ -1291,7 +1399,9 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                             {displayServerName(
                               server.name,
                               `服务器 ${index + 1}`,
-                              regionFlag(server.region),
+                              regionFlag(
+                                server.region_country || server.region,
+                              ),
                             )}
                           </Twemoji>
                         </a>
@@ -1300,7 +1410,7 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                           {displayServerName(
                             server.name,
                             `服务器 ${index + 1}`,
-                            regionFlag(server.region),
+                            regionFlag(server.region_country || server.region),
                           )}
                         </Twemoji>
                       )}
@@ -1334,15 +1444,7 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                     </span>
                   </td>
                   <td>
-                    {server.cumulative_up !== undefined ||
-                    server.cumulative_down !== undefined ? (
-                      <span className="table-cumulative">
-                        <span>↑ {bytes(server.cumulative_up, false)}</span>
-                        <span>↓ {bytes(server.cumulative_down, false)}</span>
-                      </span>
-                    ) : (
-                      <span className="dash">—</span>
-                    )}
+                    <TableBootTraffic server={server} />
                   </td>
                   <td>
                     <TablePing ping={server.ping} serverIndex={index} />
@@ -1496,8 +1598,8 @@ function ProbeLicenseNameplate({
 
 export function App() {
   const { data, error } = useProbe();
-  const [view, setView] = useState<"card" | "list">(
-    () => (localStorage.getItem("probe-view") as "card" | "list") || "card",
+  const [view, setView] = useState<"card" | "list">(() =>
+    localStorage.getItem("probe-view") === "list" ? "list" : "card",
   );
   const [filter, setFilter] = useState<
     "all" | "online" | "offline" | "expiring" | "expired" | "renewal"
@@ -1526,7 +1628,9 @@ export function App() {
   if (!data?.enabled) return <main className="center">探针尚未启用</main>;
   if (data.appearance?.theme === "premium") {
     return (
-      <Suspense fallback={<main className="center">正在加载 Premium 主题…</main>}>
+      <Suspense
+        fallback={<main className="center">正在加载 Premium 主题…</main>}
+      >
         <PremiumProbePage data={data} isLoading={false} isError={false} />
       </Suspense>
     );
@@ -1546,6 +1650,19 @@ export function App() {
         .filter((value): value is string => !!value),
     ),
   ].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  const globeRegions = servers.map(probeCountryCode).filter(Boolean);
+  const selectFilter = (next: typeof filter) => {
+    setFilter(next);
+    setRegion("all");
+  };
+  const selectRegion = (next: string) => {
+    setRegion(next);
+    setFilter("all");
+  };
+  const clearFilters = () => {
+    setFilter("all");
+    setRegion("all");
+  };
   const hasExpiry = servers.some((server) => !!server.expires_at);
   const visible = servers.filter((server) => {
     const matchesStatus =
@@ -1611,7 +1728,7 @@ export function App() {
             {hasExpiry && (
               <button
                 className="expiry-shortcut"
-                onClick={() => setFilter("renewal")}
+                onClick={() => selectFilter("renewal")}
               >
                 <CalendarClock size={14} />
                 待续费 <b>{renewalCount}</b>
@@ -1619,21 +1736,21 @@ export function App() {
             )}
           </header>
           <div className="node-stats">
-            <button onClick={() => setFilter("all")}>
+            <button onClick={() => selectFilter("all")}>
               <strong>{servers.length}</strong>
               <span>
                 <Server size={14} />
                 总节点
               </span>
             </button>
-            <button onClick={() => setFilter("online")} className="online">
+            <button onClick={() => selectFilter("online")} className="online">
               <strong>{onlineCount}</strong>
               <span>
                 <CheckCircle2 size={14} />
                 在线节点
               </span>
             </button>
-            <button onClick={() => setFilter("offline")} className="offline">
+            <button onClick={() => selectFilter("offline")} className="offline">
               <strong>{servers.length - onlineCount}</strong>
               <span>
                 <XCircle size={14} />
@@ -1687,11 +1804,7 @@ export function App() {
             <Suspense
               fallback={<div className="globe-loading">正在加载国界数据…</div>}
             >
-              <RegionGlobe
-                regions={servers
-                  .map((server) => server.region || "")
-                  .filter(Boolean)}
-              />
+              <RegionGlobe regions={globeRegions} />
             </Suspense>
           )}
         </section>
@@ -1700,19 +1813,19 @@ export function App() {
         <div className="filters">
           <button
             className={filter === "all" ? "active" : ""}
-            onClick={() => setFilter("all")}
+            onClick={() => selectFilter("all")}
           >
             全部 {servers.length}
           </button>
           <button
             className={filter === "online" ? "active" : ""}
-            onClick={() => setFilter("online")}
+            onClick={() => selectFilter("online")}
           >
             在线 {onlineCount}
           </button>
           <button
             className={filter === "offline" ? "active" : ""}
-            onClick={() => setFilter("offline")}
+            onClick={() => selectFilter("offline")}
           >
             离线 {servers.length - onlineCount}
           </button>
@@ -1720,19 +1833,19 @@ export function App() {
             <>
               <button
                 className={filter === "renewal" ? "active warning" : "warning"}
-                onClick={() => setFilter("renewal")}
+                onClick={() => selectFilter("renewal")}
               >
                 待续费 {renewalCount}
               </button>
               <button
                 className={filter === "expiring" ? "active warning" : "warning"}
-                onClick={() => setFilter("expiring")}
+                onClick={() => selectFilter("expiring")}
               >
                 即将到期 {expiringCount}
               </button>
               <button
                 className={filter === "expired" ? "active danger" : "danger"}
-                onClick={() => setFilter("expired")}
+                onClick={() => selectFilter("expired")}
               >
                 已到期 {expiredCount}
               </button>
@@ -1744,7 +1857,7 @@ export function App() {
               <select
                 aria-label="地区筛选"
                 value={region}
-                onChange={(event) => setRegion(event.target.value)}
+                onChange={(event) => selectRegion(event.target.value)}
               >
                 <option value="all">全部地区</option>
                 {regions.map((item) => (
@@ -1757,7 +1870,7 @@ export function App() {
           )}
         </div>
       </section>
-      <main className={`servers ${view}`}>
+      <main key={view} className={`servers ${view}`}>
         {visible.length ? (
           view === "card" ? (
             visible.map((server) => (
@@ -1771,7 +1884,12 @@ export function App() {
             <ServerTable servers={visible} />
           )
         ) : (
-          <div className="empty">暂无符合条件的服务器</div>
+          <div className="empty">
+            <span>暂无符合筛选条件的服务器</span>
+            <button type="button" onClick={clearFilters}>
+              查看全部
+            </button>
+          </div>
         )}
       </main>
       <footer>

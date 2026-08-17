@@ -874,6 +874,11 @@ button {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.cumulative-traffic small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+}
 .cumulative-traffic span:last-child {
   text-align: right;
 }
@@ -928,10 +933,30 @@ button {
   color: var(--muted);
 }
 .empty {
+  display: flex;
   grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   padding: 80px;
   color: var(--muted);
   text-align: center;
+}
+.empty button {
+  padding: 7px 12px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.empty button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.traffic-empty {
+  height: 100%;
+  padding: 0;
 }
 footer {
   padding: 20px;
@@ -1105,6 +1130,47 @@ footer a:hover {
   font-size: 28px;
   cursor: pointer;
 }
+.traffic-dialog-toolbar {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 14px 0 8px;
+}
+.traffic-dialog-toolbar > strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.traffic-dialog-toolbar > small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.traffic-range {
+  display: inline-flex;
+  overflow: hidden;
+  width: max-content;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.traffic-range button {
+  padding: 5px 10px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.traffic-range button + button {
+  border-left: 1px solid var(--border);
+}
+.traffic-range button.active {
+  color: #fff;
+  background: var(--primary);
+}
 .ranges {
   display: flex;
   gap: 6px;
@@ -1163,6 +1229,12 @@ footer a:hover {
   .modal {
     width: 90vw;
     padding: 18px 14px;
+  }
+  .traffic-dialog-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .traffic-dialog-toolbar > small {
+    grid-column: 1;
   }
 }
 .loading,
