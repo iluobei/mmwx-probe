@@ -1,6 +1,6 @@
 @font-face {
-  font-family: 'OPlusSans3';
-  src: url('/fonts/OPlusSans3-Medium.woff2') format('woff2');
+  font-family: "OPlusSans3";
+  src: url("/fonts/OPlusSans3-Medium.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -14,10 +14,21 @@
   min-height: 100svh;
   color: #f3ecdc;
   font-family:
-    Inter, OPlusSans3, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue',
-    Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-    'Segoe UI Symbol';
+    Inter,
+    OPlusSans3,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol";
   font-synthesis: weight;
   background: radial-gradient(
     circle at 70% 12%,
@@ -54,9 +65,10 @@
   position: fixed;
   z-index: 18;
   inset: 0;
-  content: '';
+  content: "";
   pointer-events: none;
-  background: url('/images/premium-pro-marks.svg') 24px 18px / 520px 360px repeat;
+  background: url("/images/premium-pro-marks.svg") 24px 18px / 520px 360px
+    repeat;
 }
 
 .premium-probe-page button,
@@ -220,11 +232,13 @@
   position: absolute;
   z-index: 2;
   inset: 0;
-  content: '';
+  content: "";
   background: currentColor;
   filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 7px currentColor);
-  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>") center / contain no-repeat;
-  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L58 42 L90 50 L58 58 L50 90 L42 58 L10 50 L42 42 Z' fill='white' stroke='white' stroke-width='7' stroke-linejoin='round' stroke-linecap='round'/></svg>")
+    center / contain no-repeat;
 }
 
 .license-nameplate .np-shine {
@@ -284,7 +298,7 @@
 .premium-probe-live::before {
   width: 0.42rem;
   height: 0.42rem;
-  content: '';
+  content: "";
   border-radius: 999px;
   background: #72cf72;
   box-shadow: 0 0 8px rgba(114, 207, 114, 0.72);
@@ -295,6 +309,24 @@
   overflow: hidden;
   border: 1px solid rgba(216, 180, 106, 0.3);
   border-radius: 0.48rem;
+}
+
+.premium-probe-theme-switch .probe-theme-switch {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pp-gold-bright);
+  border: 1px solid rgba(216, 180, 106, 0.3);
+  border-radius: 0.48rem;
+  background: rgba(216, 180, 106, 0.04);
+}
+
+.premium-probe-theme-switch .probe-theme-switch:hover {
+  color: var(--pp-gold-bright);
+  border-color: rgba(242, 210, 139, 0.62);
+  background: rgba(216, 180, 106, 0.1);
 }
 
 .premium-probe-view-toggle button {
@@ -1152,13 +1184,24 @@
 .premium-probe-network-view-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 1rem;
   padding: 1rem 1.1rem;
   border: 1px solid var(--pp-border);
   border-radius: 0.75rem;
   background: rgba(14, 15, 14, 0.95);
   box-shadow: 0 18px 40px -34px rgba(216, 180, 106, 0.9);
+}
+/* 标题占左侧余量,把下拉与「按服务器/转发链」开关推到右侧;开关用 order 恒定最右,
+   不因服务器模式多出的两个下拉而左右移动。 */
+.premium-probe-network-view-heading > div:first-child {
+  margin-right: auto;
+}
+.premium-probe-network-selectors {
+  order: 2;
+}
+.premium-probe-forward-modes {
+  order: 3;
 }
 
 .premium-probe-network-view-heading > div h2 {
@@ -1212,7 +1255,7 @@
   height: 0.42rem;
   flex: 0 0 auto;
   margin-left: 0.1rem;
-  content: '';
+  content: "";
   border-right: 1px solid #c9ad68;
   border-bottom: 1px solid #c9ad68;
   transform: translateY(-0.12rem) rotate(45deg);
@@ -1468,17 +1511,17 @@
   width: 0.42rem;
   height: 0.42rem;
   margin-right: 0.3rem;
-  content: '';
+  content: "";
   border-radius: 999px;
   background: #72cf72;
   box-shadow: 0 0 6px rgba(114, 207, 114, 0.5);
 }
 
-.premium-probe-network-legend span[data-level='medium']::before {
+.premium-probe-network-legend span[data-level="medium"]::before {
   background: #e5b954;
 }
 
-.premium-probe-network-legend span[data-level='poor']::before {
+.premium-probe-network-legend span[data-level="poor"]::before {
   background: #ef5b64;
 }
 
@@ -1538,13 +1581,13 @@
   box-shadow: 0 0 7px rgba(114, 207, 114, 0.58);
 }
 
-.premium-probe-network-server > i[data-level='medium'] {
+.premium-probe-network-server > i[data-level="medium"] {
   background: #e5b954;
   box-shadow: 0 0 7px rgba(229, 185, 84, 0.58);
 }
 
-.premium-probe-network-server > i[data-level='poor'],
-.premium-probe-network-server > i[data-level='missing'] {
+.premium-probe-network-server > i[data-level="poor"],
+.premium-probe-network-server > i[data-level="missing"] {
   background: #ef5b64;
   box-shadow: 0 0 7px rgba(239, 91, 100, 0.58);
 }
@@ -1577,12 +1620,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.premium-probe-network-row > strong[data-level='medium'] {
+.premium-probe-network-row > strong[data-level="medium"] {
   color: #e5b954;
 }
 
-.premium-probe-network-row > strong[data-level='poor'],
-.premium-probe-network-row > strong[data-level='missing'] {
+.premium-probe-network-row > strong[data-level="poor"],
+.premium-probe-network-row > strong[data-level="missing"] {
   color: #ef777e;
 }
 
@@ -1746,7 +1789,7 @@
   left: -22%;
   width: 20%;
   height: 1px;
-  content: '';
+  content: "";
   pointer-events: none;
   background: linear-gradient(90deg, transparent, #f2d489, transparent);
   will-change: transform, opacity;
@@ -1884,8 +1927,8 @@
   box-shadow: 0 0 8px rgba(112, 202, 118, 0.65);
 }
 
-.premium-probe-command-nodes button[data-tone='warning'] > i,
-.premium-probe-command-nodes button[data-tone='critical'] > i {
+.premium-probe-command-nodes button[data-tone="warning"] > i,
+.premium-probe-command-nodes button[data-tone="critical"] > i {
   background: #ef5b64;
   box-shadow: 0 0 8px rgba(239, 91, 100, 0.6);
 }
@@ -2394,7 +2437,7 @@
   right: 4rem;
   left: 4rem;
   height: 1px;
-  content: '';
+  content: "";
   background: linear-gradient(
     90deg,
     transparent,
@@ -2560,7 +2603,7 @@
   pointer-events: none;
   border: 1px solid rgba(216, 180, 106, 0.2);
   border-radius: calc(0.75rem - 4px);
-  content: '';
+  content: "";
 }
 
 .premium-probe-server-card > * {
@@ -2612,8 +2655,8 @@
   background: rgba(112, 202, 118, 0.07);
 }
 
-.premium-probe-health-score[data-tone='warning'],
-.premium-probe-health-score[data-tone='critical'] {
+.premium-probe-health-score[data-tone="warning"],
+.premium-probe-health-score[data-tone="critical"] {
   color: #ed737b;
   border-color: rgba(239, 91, 100, 0.3);
   background: rgba(239, 91, 100, 0.07);
@@ -2856,8 +2899,8 @@
   font-size: 2rem;
 }
 
-.premium-probe-drawer-health > strong[data-tone='warning'],
-.premium-probe-drawer-health > strong[data-tone='critical'] {
+.premium-probe-drawer-health > strong[data-tone="warning"],
+.premium-probe-drawer-health > strong[data-tone="critical"] {
   color: #ef6972;
 }
 
@@ -3195,4 +3238,973 @@
   .premium-probe-node-connections path {
     animation: none;
   }
+}
+
+:root.theme-premium.light,
+:root.theme-premium.light body {
+  color-scheme: light;
+  color: #241e14;
+  background-color: #f7f4ec;
+  background-image:
+    radial-gradient(
+      circle at 18% 8%,
+      rgba(168, 124, 34, 0.1),
+      transparent 24rem
+    ),
+    radial-gradient(
+      circle at 82% 72%,
+      rgba(168, 124, 34, 0.05),
+      transparent 28rem
+    );
+}
+
+:root.theme-premium.light #root {
+  color: #241e14;
+}
+
+/* Champagne light palette, derived from premium-light-preview.html. */
+:root.light .premium-probe-page {
+  --pp-gold: #a87c22;
+  --pp-gold-bright: #c9962b;
+  --pp-border: rgba(168, 124, 34, 0.34);
+  --pp-panel: #fffdf8;
+  color: #241e14;
+  background: radial-gradient(
+    circle at 70% 12%,
+    rgba(168, 124, 34, 0.09),
+    transparent 26rem
+  );
+}
+
+:root.light .premium-probe-loading {
+  color: #665c4c;
+  background: #f7f4ec;
+}
+
+:root.light .premium-probe-topbar {
+  border-color: rgba(168, 124, 34, 0.34);
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: 0 10px 28px -24px rgba(120, 86, 20, 0.45);
+}
+
+:root.light .premium-probe-pro {
+  color: #8a6210;
+  border-color: rgba(168, 124, 34, 0.34);
+  background: linear-gradient(
+    110deg,
+    rgba(201, 150, 43, 0.2),
+    rgba(168, 124, 34, 0.06)
+  );
+  box-shadow: 0 1px 2px rgba(36, 30, 20, 0.07);
+}
+
+:root.light .premium-probe-theme-switch .probe-theme-switch {
+  color: #8a6210;
+  border-color: rgba(168, 124, 34, 0.34);
+  background: rgba(168, 124, 34, 0.06);
+}
+
+:root.light .premium-probe-theme-switch .probe-theme-switch:hover {
+  color: #6f4e0c;
+  border-color: rgba(168, 124, 34, 0.58);
+  background: rgba(168, 124, 34, 0.12);
+}
+
+:root.light .premium-probe-region-trigger {
+  color: #665c4c;
+  border-color: rgba(168, 124, 34, 0.34);
+  background: rgba(255, 253, 248, 0.86);
+}
+
+:root.light .premium-probe-filters {
+  border-color: rgba(168, 124, 34, 0.24);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.7);
+}
+
+:root.light .premium-probe-region-trigger:hover,
+:root.light .premium-probe-region-trigger[data-state="open"] {
+  color: #6f4e0c;
+  border-color: rgba(168, 124, 34, 0.58);
+  background: rgba(168, 124, 34, 0.1);
+}
+
+:root.light .premium-probe-region-menu {
+  color: #3c3020;
+  border-color: rgba(168, 124, 34, 0.34);
+  background: rgba(255, 253, 248, 0.99);
+  box-shadow: 0 18px 38px -22px rgba(120, 86, 20, 0.42);
+}
+
+:root.light .premium-probe-region-menu [data-slot="select-item"]:focus {
+  color: #6f4e0c;
+  background: rgba(168, 124, 34, 0.13);
+}
+
+:root.light .premium-probe-live,
+:root.light .premium-probe-kpis span,
+:root.light .premium-probe-network-title > span,
+:root.light .premium-probe-panel-heading > span,
+:root.light .premium-probe-section-heading > span,
+:root.light .premium-probe-speed-heading span,
+:root.light .premium-probe-overview-chart-heading span,
+:root.light .premium-probe-speed-meta small,
+:root.light .premium-probe-map aside button,
+:root.light .premium-probe-globe-stage > span,
+:root.light .premium-probe-resource span,
+:root.light .premium-probe-insight > div:first-child span,
+:root.light .premium-probe-network-view-heading > div > span,
+:root.light .premium-probe-network-kpis span,
+:root.light .premium-probe-network-kpis small,
+:root.light .premium-probe-target-toolbar button,
+:root.light .premium-probe-network-legend,
+:root.light .premium-probe-network-table-head,
+:root.light .premium-probe-network-server small,
+:root.light .premium-probe-resource-heading p,
+:root.light .premium-probe-resource-heading > strong,
+:root.light .premium-probe-server-status,
+:root.light .premium-probe-card-traffic > span,
+:root.light .premium-probe-card-latency > span,
+:root.light .premium-probe-drawer-accounting span,
+:root.light .premium-probe-drawer-accounting p,
+:root.light .premium-probe-drawer-traffic-note,
+:root.light .premium-probe-drawer-section-heading button,
+:root.light .premium-probe-drawer p,
+:root.light .premium-probe-drawer small {
+  color: #746b5c;
+}
+
+:root.light .premium-probe-panel,
+:root.light .premium-probe-server-card,
+:root.light .premium-probe-filters,
+:root.light .premium-probe-network-view-heading,
+:root.light .premium-probe-network-matrix,
+:root.light .premium-probe-network-kpis article,
+:root.light .premium-probe-smart-summary,
+:root.light .premium-probe-command-kpis article,
+:root.light .premium-probe-command-nodes button,
+:root.light .premium-probe-resource-heading,
+:root.light .premium-probe-insight-card,
+:root.light .premium-probe-drawer-section,
+:root.light .premium-probe-network-history > div,
+:root.light .premium-probe-network-history > p {
+  background-color: #fffdf8;
+  background-image: linear-gradient(
+    145deg,
+    rgba(168, 124, 34, 0.035),
+    transparent 44%
+  );
+  box-shadow:
+    0 1px 2px rgba(36, 30, 20, 0.05),
+    0 10px 26px -20px rgba(120, 86, 20, 0.5);
+}
+
+:root.light .premium-probe-kpis button,
+:root.light .premium-probe-speed-snapshot,
+:root.light .premium-probe-overview-chart-card,
+:root.light .premium-probe-hotspot-list i,
+:root.light .premium-probe-route-badges > span,
+:root.light .premium-probe-target-toolbar,
+:root.light .premium-probe-target-toolbar button,
+:root.light .premium-probe-network-row:hover,
+:root.light .premium-probe-resource-grid article,
+:root.light .premium-probe-drawer-metrics > div,
+:root.light .premium-probe-drawer-pings > div,
+:root.light .premium-probe-drawer-routes > span {
+  background-color: rgba(168, 124, 34, 0.045);
+}
+
+:root.light .premium-probe-drawer-accounting {
+  border-color: rgba(168, 124, 34, 0.2);
+  background: rgba(168, 124, 34, 0.035);
+}
+
+:root.light .premium-probe-kpis button,
+:root.light .premium-probe-network-grid > *,
+:root.light .premium-probe-server-footer,
+:root.light .premium-probe-network-table-head,
+:root.light .premium-probe-network-row {
+  border-color: rgba(168, 124, 34, 0.2);
+}
+
+:root.light .premium-probe-kpis button,
+:root.light .premium-probe-resource strong,
+:root.light .premium-probe-daily-list span,
+:root.light .premium-probe-route-badges b,
+:root.light .premium-probe-map aside button,
+:root.light .premium-probe-orbit-label-content,
+:root.light .premium-probe-network-server strong,
+:root.light .premium-probe-smart-summary strong,
+:root.light .premium-probe-command-heading h2,
+:root.light .premium-probe-command-nodes strong,
+:root.light .premium-probe-resource-heading h2,
+:root.light .premium-probe-server-card h3,
+:root.light .premium-probe-drawer h2,
+:root.light .premium-probe-drawer h3 {
+  color: #2c251a;
+}
+
+:root.light .premium-probe-speed-heading strong,
+:root.light .premium-probe-overview-chart-heading strong,
+:root.light .premium-probe-route-badges small,
+:root.light .premium-probe-network-grid .premium-probe-resource strong,
+:root.light .premium-probe-map aside button:hover,
+:root.light .premium-probe-map aside button strong,
+:root.light .premium-probe-resource-heading > div > span,
+:root.light .premium-probe-health-score,
+:root.light .premium-probe-card-traffic strong,
+:root.light .premium-probe-card-latency strong,
+:root.light .premium-probe-drawer-accounting strong,
+:root.light .premium-probe-drawer-section-heading button:hover,
+:root.light .premium-probe-drawer-section-heading button.is-active {
+  color: #8a6210;
+}
+
+:root.light .premium-probe-map aside {
+  background: rgba(168, 124, 34, 0.035);
+}
+
+:root.light .premium-probe-network-selectors > label,
+:root.light .premium-probe-network-selectors > label:hover,
+:root.light .premium-probe-network-selectors > label:focus-within,
+:root.light .premium-probe-network-view-heading select option {
+  color: #2c251a;
+  background: #fbf8f0;
+}
+
+:root.light .premium-probe-chart-tooltip,
+:root.light .premium-probe-multi-tooltip {
+  color: #241e14;
+  background: rgba(255, 253, 248, 0.98);
+  box-shadow: 0 10px 24px rgba(120, 86, 20, 0.18);
+}
+
+:root.light .premium-probe-chart-tooltip strong,
+:root.light .premium-probe-multi-tooltip strong,
+:root.light .premium-probe-multi-tooltip b {
+  color: #8a6210;
+}
+
+:root.light .premium-probe-ocean-start {
+  stop-color: #fffaf0;
+}
+
+:root.light .premium-probe-ocean-middle {
+  stop-color: #f0e5ce;
+}
+
+:root.light .premium-probe-ocean-end {
+  stop-color: #dbc89e;
+}
+
+:root.light .premium-probe-ocean {
+  filter: drop-shadow(0 14px 14px rgba(120, 86, 20, 0.2));
+}
+
+:root.light .premium-probe-globe-glow {
+  fill: rgba(168, 124, 34, 0.16);
+}
+
+:root.light .premium-probe-graticule {
+  stroke: rgba(138, 98, 16, 0.2);
+}
+
+:root.light [data-premium-probe-country] {
+  fill: #eee4ce;
+  stroke: rgba(138, 98, 16, 0.48);
+}
+
+:root.light [data-premium-probe-country].is-active {
+  fill: #d8bd78;
+  stroke: #8a6210;
+  filter: drop-shadow(0 0 3px rgba(168, 124, 34, 0.42));
+}
+
+:root.light .premium-probe-globe-outline {
+  stroke: #a87c22;
+  filter: drop-shadow(0 0 4px rgba(168, 124, 34, 0.34));
+}
+
+:root.light .premium-probe-orbit-labels rect {
+  fill: rgba(255, 253, 248, 0.96);
+  stroke: rgba(168, 124, 34, 0.52);
+}
+
+:root.light .premium-probe-orbit-label-content {
+  color: #3c3020;
+}
+
+:root.light .premium-probe-orbit-label-count {
+  color: #6f4e0c;
+  border-color: rgba(168, 124, 34, 0.5);
+  background: rgba(168, 124, 34, 0.1);
+}
+
+:root.light .premium-probe-drawer-layer {
+  background: rgba(74, 58, 28, 0.28);
+}
+
+:root.light .premium-probe-drawer {
+  color: #241e14;
+  background:
+    linear-gradient(145deg, rgba(168, 124, 34, 0.06), transparent 28%), #fffdf8;
+  box-shadow: -24px 0 80px rgba(74, 58, 28, 0.2);
+}
+
+/* ============ 网络状况 → 转发链视图 ============ */
+.premium-probe-forward-modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--pp-border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.premium-probe-forward-modes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a9a08c;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.premium-probe-forward-modes button svg {
+  width: 14px;
+  height: 14px;
+}
+.premium-probe-forward-modes button.is-active {
+  color: var(--pp-gold-bright);
+  background: rgba(216, 180, 106, 0.12);
+}
+.premium-probe-forward-modes button:not(.is-active):hover {
+  color: #f3ecdc;
+}
+
+.premium-probe-forward {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.premium-probe-forward-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: #8f867a;
+  border: 1px dashed var(--pp-border);
+  border-radius: 14px;
+}
+
+.premium-probe-forward-chainbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.premium-probe-forward-chainbar > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--pp-gold);
+}
+.premium-probe-forward-chainbar .k {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8f867a;
+}
+.premium-probe-forward-chaintabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.premium-probe-forward-chaintabs button {
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #a9a08c;
+  background: var(--pp-panel);
+  border: 1px solid var(--pp-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.premium-probe-forward-chaintabs button.is-active {
+  color: #1a1406;
+  background: var(--pp-gold);
+  border-color: var(--pp-gold);
+}
+
+/* 转发组流量:堆叠柱状图(替代宽表格,1 个月周期也放得下) */
+.premium-probe-forward-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.premium-probe-forward-grouptabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.premium-probe-forward-grouptabs button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #a9a08c;
+  background: var(--pp-panel);
+  border: 1px solid var(--pp-border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.premium-probe-forward-grouptabs button:hover {
+  border-color: var(--pp-gold);
+}
+.premium-probe-forward-grouptabs button.is-active {
+  color: #f3e6c6;
+  border-color: var(--pp-gold);
+  background: rgba(216, 180, 106, 0.12);
+}
+.premium-probe-forward-grouptabs button .g {
+  font-weight: 700;
+}
+.premium-probe-forward-grouptabs button .rl {
+  padding: 2px 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: 5px;
+}
+.premium-probe-forward-grouptabs button .t {
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  color: var(--pp-gold);
+}
+.premium-probe-forward-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  min-height: 20px;
+  font-size: 12px;
+  color: #a9a08c;
+}
+.premium-probe-forward-chart-head .total {
+  font-size: 12.5px;
+}
+.premium-probe-forward-chart-head .total b,
+.premium-probe-forward-chart-head .s b,
+.premium-probe-forward-chart-head .sum {
+  color: var(--pp-gold);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+.premium-probe-forward-chart-head .d {
+  font-weight: 750;
+  color: #e9dcbf;
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward-chart-head .s {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.premium-probe-forward-chart-head .s b {
+  margin-left: 3px;
+}
+.premium-probe-forward-chart-head .s i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.premium-probe-forward-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.premium-probe-forward-chart svg {
+  width: 100%;
+  height: 200px;
+  display: block;
+  overflow: visible;
+}
+.premium-probe-forward-chart svg rect {
+  transition: opacity 0.12s;
+}
+.premium-probe-forward-chart-xaxis {
+  display: flex;
+}
+.premium-probe-forward-chart-xaxis span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 9.5px;
+  color: #7d7462;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* 统计卡 */
+.premium-probe-forward-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.premium-probe-forward-stats .stat {
+  position: relative;
+  padding: 16px 18px;
+  background: var(--pp-panel);
+  border: 1px solid var(--pp-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.premium-probe-forward-stats .stat::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--edge, var(--pp-gold));
+  opacity: 0.7;
+}
+.premium-probe-forward-stats .stat .k {
+  font-size: 12px;
+  color: #9a917d;
+  margin-bottom: 10px;
+}
+.premium-probe-forward-stats .stat .v {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward-stats .stat .v .u {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9a917d;
+  margin-left: 3px;
+}
+.premium-probe-forward-stats .stat .foot {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #776e60;
+}
+.premium-probe-forward-stats .stat.is-gold .v {
+  color: var(--pp-gold-bright);
+}
+.premium-probe-forward-stats .stat.is-ok .v {
+  color: #6bd39a;
+}
+.premium-probe-forward-stats .stat.is-ok {
+  --edge: #6bd39a;
+}
+.premium-probe-forward-stats .stat.is-n .v {
+  color: #f3ecdc;
+}
+.premium-probe-forward-stats .stat.is-n {
+  --edge: #4a4636;
+}
+
+/* 卡片外壳 */
+.premium-probe-forward-card {
+  background: var(--pp-panel);
+  border: 1px solid var(--pp-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.premium-probe-forward-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--pp-border);
+  flex-wrap: wrap;
+}
+.premium-probe-forward-card > header h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.premium-probe-forward-card > header h3 svg {
+  width: 16px;
+  height: 16px;
+  color: var(--pp-gold);
+}
+.premium-probe-forward-card > header > span {
+  font-size: 11.5px;
+  color: #776e60;
+}
+.premium-probe-forward-card > .body {
+  padding: 18px;
+}
+
+/* ① 流向条 */
+.premium-probe-forward .ribbon {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: 16px;
+}
+.premium-probe-forward .rnode {
+  flex: 1 0 150px;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--pp-border);
+  border-radius: 11px;
+}
+.premium-probe-forward .rnode .role {
+  align-self: flex-start;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  border-radius: 5px;
+}
+.premium-probe-forward .rnode.is-entry .role {
+  color: #6bd39a;
+  background: rgba(107, 211, 154, 0.13);
+}
+.premium-probe-forward .rnode.is-mid .role {
+  color: #63bce8;
+  background: rgba(99, 188, 232, 0.13);
+}
+.premium-probe-forward .rnode.is-exit .role {
+  color: #e6a24a;
+  background: rgba(230, 162, 74, 0.14);
+}
+.premium-probe-forward .rnode .gname {
+  font-size: 14px;
+  font-weight: 700;
+}
+.premium-probe-forward .rnode .gmeta {
+  font-size: 11px;
+  color: #8f867a;
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward .rlink {
+  flex: 0 0 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+.premium-probe-forward .rlink .lat {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pp-gold-bright);
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward .rlink .arw {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--pp-border), var(--pp-gold));
+}
+.premium-probe-forward .rlink .arw::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -3px;
+  border-left: 7px solid var(--pp-gold);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.premium-probe-forward .rlink .lbl {
+  font-size: 10px;
+  color: #776e60;
+}
+
+/* 趋势图 */
+.premium-probe-forward-trend {
+  width: 100%;
+  height: 130px;
+  display: block;
+}
+.premium-probe-forward-trend-empty {
+  padding: 30px;
+  text-align: center;
+  font-size: 12px;
+  color: #776e60;
+}
+
+/* ② 拓扑 */
+.premium-probe-forward .topo {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.premium-probe-forward .grp {
+  flex: 0 0 240px;
+  min-width: 240px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--pp-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.premium-probe-forward .grp-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--pp-border);
+}
+.premium-probe-forward .grp-h .nm {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.premium-probe-forward .grp-h .rl,
+.premium-probe-forward-heatmap .rl {
+  padding: 2px 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: 5px;
+}
+.premium-probe-forward .rl.is-entry,
+.premium-probe-forward-heatmap .rl.is-entry {
+  color: #6bd39a;
+  background: rgba(107, 211, 154, 0.13);
+}
+.premium-probe-forward .rl.is-mid,
+.premium-probe-forward-heatmap .rl.is-mid {
+  color: #63bce8;
+  background: rgba(99, 188, 232, 0.13);
+}
+.premium-probe-forward .rl.is-exit,
+.premium-probe-forward-heatmap .rl.is-exit {
+  color: #e6a24a;
+  background: rgba(230, 162, 74, 0.14);
+}
+.premium-probe-forward .grp-agg {
+  padding: 8px 14px;
+  font-size: 11.5px;
+  color: #9a917d;
+  background: rgba(216, 180, 106, 0.05);
+  border-bottom: 1px solid var(--pp-border);
+}
+.premium-probe-forward .grp-agg b {
+  color: var(--pp-gold-bright);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.premium-probe-forward .srv {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--pp-border);
+}
+.premium-probe-forward .srv:last-child {
+  border-bottom: 0;
+}
+.premium-probe-forward .srv .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.premium-probe-forward .srv .dot.is-up {
+  background: #6bd39a;
+}
+.premium-probe-forward .srv .dot.is-down {
+  background: #e2606a;
+}
+.premium-probe-forward .srv .sn {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.premium-probe-forward .srv .slat {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward .slat.is-good {
+  color: #6bd39a;
+}
+.premium-probe-forward .slat.is-ok {
+  color: var(--pp-gold-bright);
+}
+.premium-probe-forward .slat.is-hi {
+  color: #e6884a;
+}
+.premium-probe-forward .slat.is-idle {
+  color: #776e60;
+}
+.premium-probe-forward .tconn {
+  flex: 0 0 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 2px;
+}
+.premium-probe-forward .tconn .cl {
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #776e60;
+}
+.premium-probe-forward .tconn .cv {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pp-gold-bright);
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward .tconn .cline {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--pp-border) 0 6px,
+    transparent 6px 11px
+  );
+}
+.premium-probe-forward .tconn .cline::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -3px;
+  border-left: 7px solid var(--pp-gold);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+/* ③ 流量热力表 */
+.premium-probe-forward-heatmap-wrap {
+  overflow-x: auto;
+}
+.premium-probe-forward-heatmap {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 680px;
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward-heatmap th {
+  padding: 0 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9a917d;
+}
+.premium-probe-forward-heatmap th.srv {
+  text-align: left;
+  padding-left: 6px;
+  min-width: 160px;
+}
+.premium-probe-forward-heatmap th.tot {
+  text-align: right;
+  padding-right: 8px;
+  color: var(--pp-gold-bright);
+}
+.premium-probe-forward-heatmap tr.grp td {
+  padding: 13px 6px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #9a917d;
+  text-align: left;
+}
+.premium-probe-forward-heatmap td.srv {
+  text-align: left;
+  padding: 4px 6px;
+  font-size: 12.5px;
+}
+.premium-probe-forward-heatmap td.cell {
+  padding: 3px;
+}
+.premium-probe-forward-heatmap td.cell .box {
+  height: 32px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 500;
+}
+.premium-probe-forward-heatmap td.tot {
+  text-align: right;
+  padding-right: 8px;
+  font-weight: 600;
+  color: var(--pp-gold-bright);
+  font-size: 13px;
+}
+
+@media (max-width: 820px) {
+  .premium-probe-forward-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ==== 转发链视图:布局稳定 + light 主题修正 ==== */
+/* 切换「按服务器/转发链」时竖向滚动条出现/消失会导致整页宽度抖动 → 固定滚动条槽 */
+:root.theme-premium {
+  scrollbar-gutter: stable;
+}
+/* 卡内浅色底块随主题自适应(dark 微亮 / light 微暗),替代写死的 rgba(255,255,255,.02) */
+.premium-probe-forward .rnode,
+.premium-probe-forward .grp {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+/* light 主题:暗色主题的浅灰字在奶白底上过淡,统一压深 */
+:root.light .premium-probe-forward-modes button,
+:root.light .premium-probe-forward-chaintabs button,
+:root.light .premium-probe-forward-chainbar .k,
+:root.light .premium-probe-forward-stats .stat .k,
+:root.light .premium-probe-forward-stats .stat .foot,
+:root.light .premium-probe-forward-stats .stat .v .u,
+:root.light .premium-probe-forward-card > header > span,
+:root.light .premium-probe-forward .rnode .gmeta,
+:root.light .premium-probe-forward .rlink .lbl,
+:root.light .premium-probe-forward .grp-agg,
+:root.light .premium-probe-forward .tconn .cl,
+:root.light .premium-probe-forward-heatmap th,
+:root.light .premium-probe-forward-heatmap tr.grp td,
+:root.light .premium-probe-forward-grouptabs button,
+:root.light .premium-probe-forward-chart-head,
+:root.light .premium-probe-forward-chart-xaxis span,
+:root.light .premium-probe-forward-empty,
+:root.light .premium-probe-forward-trend-empty {
+  color: #8a7f64;
+}
+/* light 主题:近白值色(链路结构)在奶白底上不可见 → 用主题深色文字 */
+:root.light .premium-probe-forward-stats .stat.is-n .v {
+  color: #241e14;
+}
+/* light 主题:选中组标签 / 悬停日期在奶白底上要压深 */
+:root.light .premium-probe-forward-grouptabs button.is-active {
+  color: #3a2e0e;
+}
+:root.light .premium-probe-forward-chart-head .d {
+  color: #241e14;
 }

@@ -111,6 +111,20 @@ button {
   border-color: var(--primary);
   background: var(--primary);
 }
+.probe-theme-switch svg {
+  pointer-events: none;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .servers {
   width: min(1600px, calc(100% - 48px));
   margin: 0 auto;

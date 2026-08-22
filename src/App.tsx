@@ -67,6 +67,7 @@ import type {
   ProbeServer,
 } from "./types";
 import { useProbe } from "./use-probe";
+import { ThemeSwitch } from "./ThemeSwitch";
 import { Twemoji } from "./Twemoji";
 import { displayServerName } from "./server-name";
 import {
@@ -81,6 +82,11 @@ import {
 } from "./traffic-display";
 import commonRouteAnimation from "./assets/return-route/common.json";
 import premiumRouteAnimation from "./assets/return-route/premium.json";
+import {
+  effectiveProbeLineKey,
+  probeLinesForScope,
+  type ProbeLineScope,
+} from "./probe-line-scope";
 
 const colors = [
   "#8b5cf6",
@@ -583,6 +589,8 @@ function TrendDialog({
 }) {
   const [range, setRange] = useState<RangeKey>("1h");
   const [series, setSeries] = useState<ProbePingSeries[]>(initial);
+  const [lineScope, setLineScope] = useState<ProbeLineScope>("all");
+  const [selectedLineKey, setSelectedLineKey] = useState(targetKey);
   const [loading, setLoading] = useState(false);
   const [timeMeta, setTimeMeta] = useState({
     generatedAt: Math.floor(Date.now() / 1000),
@@ -628,26 +636,45 @@ function TrendDialog({
     return () => controller.abort();
   }, [range, serverIndex]);
 
+  const visibleSeries = useMemo(
+    () => probeLinesForScope(series, lineScope),
+    [series, lineScope],
+  );
+  const effectiveLineKey = effectiveProbeLineKey(
+    series,
+    lineScope,
+    selectedLineKey,
+  );
+
+  useEffect(() => {
+    if (effectiveLineKey !== selectedLineKey) {
+      setSelectedLineKey(effectiveLineKey);
+    }
+  }, [effectiveLineKey, selectedLineKey]);
+
   const rows = useMemo(
     () =>
-      Array.from({ length: series[0]?.buckets.length || 0 }, (_, index) => {
-        const row: Record<string, string | number | null> = {
-          time: formatAxisDateTime(
-            timeMeta.generatedAt -
-              (timeMeta.generatedAt % timeMeta.bucketSec) -
-              ((series[0]?.buckets.length || 0) - 1 - index) *
-                timeMeta.bucketSec,
-          ),
-        };
-        for (const item of series) {
-          const bucket = item.buckets[index];
-          const value = mode === "loss" ? bucket?.loss : bucket?.ms;
-          row[item.key || item.label] =
-            value !== undefined && value >= 0 ? value : null;
-        }
-        return row;
-      }),
-    [series, mode, timeMeta],
+      Array.from(
+        { length: visibleSeries[0]?.buckets.length || 0 },
+        (_, index) => {
+          const row: Record<string, string | number | null> = {
+            time: formatAxisDateTime(
+              timeMeta.generatedAt -
+                (timeMeta.generatedAt % timeMeta.bucketSec) -
+                ((visibleSeries[0]?.buckets.length || 0) - 1 - index) *
+                  timeMeta.bucketSec,
+            ),
+          };
+          for (const item of visibleSeries) {
+            const bucket = item.buckets[index];
+            const value = mode === "loss" ? bucket?.loss : bucket?.ms;
+            row[item.key || item.label] =
+              value !== undefined && value >= 0 ? value : null;
+          }
+          return row;
+        },
+      ),
+    [visibleSeries, mode, timeMeta],
   );
   const dynamicLossScale = useMemo(() => lossScale(rows), [rows]);
 
@@ -676,9 +703,41 @@ function TrendDialog({
               {item.label}
             </button>
           ))}
+          <span className="ranges-sep" />
+          {(["all", "cn", "idc"] as const).map((scope) => (
+            <button
+              type="button"
+              className={lineScope === scope ? "active" : ""}
+              onClick={() => setLineScope(scope)}
+              key={scope}
+            >
+              {scope === "all" ? "全部" : scope === "cn" ? "内地" : "海外"}
+            </button>
+          ))}
+          {visibleSeries.length > 0 && (
+            <select
+              aria-label="当前探测线路"
+              value={effectiveLineKey}
+              onChange={(event) => setSelectedLineKey(event.target.value)}
+            >
+              {visibleSeries.map((item) => {
+                const key = item.key || item.label;
+                return (
+                  <option value={key} key={key}>
+                    {item.label}
+                  </option>
+                );
+              })}
+            </select>
+          )}
         </div>
         <div className="chart">
           {loading && <div className="loading-overlay">加载中…</div>}
+          {!loading && visibleSeries.length === 0 && (
+            <div className="chart-empty">
+              该服务器未配置{lineScope === "cn" ? "内地" : "海外"}探测点
+            </div>
+          )}
           <HorizontalChart width={Math.max(760, rows.length * 82)}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
@@ -713,14 +772,14 @@ function TrendDialog({
                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
                   formatter={(value, _name, item) => [
                     `${Number(value).toFixed(mode === "loss" ? 1 : 0)}${mode === "loss" ? "%" : "ms"}`,
-                    series.find(
+                    visibleSeries.find(
                       (line) => (line.key || line.label) === item.dataKey,
                     )?.label || String(item.dataKey),
                   ]}
                 />
-                {series.map((item, index) => {
+                {visibleSeries.map((item, index) => {
                   const key = item.key || item.label;
-                  const active = key === targetKey;
+                  const active = key === effectiveLineKey;
                   return (
                     <Line
                       key={key}
@@ -744,12 +803,15 @@ function TrendDialog({
             </ResponsiveContainer>
           </HorizontalChart>
         </div>
-        {series.length > 1 && (
+        {visibleSeries.length > 1 && (
           <div className="legend">
-            {series.map((item, index) => {
+            {visibleSeries.map((item, index) => {
               const key = item.key || item.label;
               return (
-                <span className={key === targetKey ? "active" : ""} key={key}>
+                <span
+                  className={key === effectiveLineKey ? "active" : ""}
+                  key={key}
+                >
                   <i
                     style={{
                       background:
@@ -1321,10 +1383,7 @@ function TableTraffic({
 
 function TableBootTraffic({ server }: { server: ProbeServer }) {
   const currentBoot = bootTraffic(server);
-  if (
-    currentBoot.uplink === undefined &&
-    currentBoot.downlink === undefined
-  ) {
+  if (currentBoot.uplink === undefined && currentBoot.downlink === undefined) {
     return <span className="dash">—</span>;
   }
   return (
@@ -1700,6 +1759,7 @@ export function App() {
           <h1>{title}</h1>
         </div>
         <nav>
+          <ThemeSwitch appearance={data.appearance} />
           <button
             aria-label="卡片视图"
             title="卡片视图"
