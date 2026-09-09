@@ -43,6 +43,7 @@ import {
 } from "./server-detail-route";
 import { BlackGoldGlobe, type PremiumProbeRegion } from "./BlackGoldGlobe";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { PasskeyLogin } from "./PasskeyLogin";
 import "./premium-probe.css";
 
 type ProbeData = ProbePayload;
@@ -545,6 +546,8 @@ function renewalTimelineRows(servers: ProbeServer[]) {
         days,
         price,
         monthlyPrice: price === undefined ? undefined : price / cycleMonths,
+        providerName: server.provider_name,
+        providerUrl: server.provider_url,
       };
     })
     .filter((item): item is NonNullable<typeof item> => !!item)
@@ -557,7 +560,14 @@ function RenewalTimeline({
   rows: ReturnType<typeof renewalTimelineRows>;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
+  // moved:区分「拖动时间轴」和「点某一格」——拖完手指抬起会紧跟一个 click,
+  // 不记这个标记的话,横向拖一下就会误开服务商官网。
+  const dragRef = useRef({
+    active: false,
+    startX: 0,
+    scrollLeft: 0,
+    moved: false,
+  });
   const currentMonth = new Date().toISOString().slice(0, 7);
   const monthlyTotal = rows.reduce(
     (total, item) => total + (item.monthlyPrice || 0),
@@ -593,15 +603,17 @@ function RenewalTimeline({
               active: true,
               startX: event.clientX,
               scrollLeft: track.scrollLeft,
+              moved: false,
             };
             track.setPointerCapture(event.pointerId);
           }}
           onPointerMove={(event) => {
             const track = trackRef.current;
             if (!track || !dragRef.current.active) return;
-            track.scrollLeft =
-              dragRef.current.scrollLeft -
-              (event.clientX - dragRef.current.startX);
+            const dx = event.clientX - dragRef.current.startX;
+            // 4px 的容差:点击时手指/鼠标难免抖一两个像素,不该算成拖动。
+            if (Math.abs(dx) > 4) dragRef.current.moved = true;
+            track.scrollLeft = dragRef.current.scrollLeft - dx;
           }}
           onPointerUp={() => {
             dragRef.current.active = false;
@@ -611,34 +623,57 @@ function RenewalTimeline({
           }}
         >
           <div className="premium-probe-renewal-track">
-            {rows.map((item) => (
-              <div
-                key={item.index}
-                className={
-                  item.days < 0
-                    ? "is-expired"
-                    : item.days <= 30
-                      ? "is-due"
-                      : undefined
-                }
-              >
-                <time>{item.expiresAt}</time>
-                <i />
-                <Twemoji className="premium-probe-server-name">
-                  {item.name}
-                </Twemoji>
-                <strong>
-                  {item.days < 0
-                    ? `已过期 ${Math.abs(item.days)} 天`
-                    : item.days === 0
-                      ? "今天到期"
-                      : `${item.days} 天后`}
-                </strong>
-                {item.price !== undefined && (
-                  <small>¥{item.price.toFixed(2)}</small>
-                )}
-              </div>
-            ))}
+            {rows.map((item) => {
+              const tone =
+                item.days < 0
+                  ? "is-expired"
+                  : item.days <= 30
+                    ? "is-due"
+                    : undefined;
+              const inner = (
+                <>
+                  <time>{item.expiresAt}</time>
+                  <i />
+                  <Twemoji className="premium-probe-server-name">
+                    {item.name}
+                  </Twemoji>
+                  <strong>
+                    {item.days < 0
+                      ? `已过期 ${Math.abs(item.days)} 天`
+                      : item.days === 0
+                        ? "今天到期"
+                        : `${item.days} 天后`}
+                  </strong>
+                  {item.price !== undefined && (
+                    <small>¥{item.price.toFixed(2)}</small>
+                  )}
+                </>
+              );
+              // 到期了要续费,下一步一定是去服务商官网 —— 填了 URL 就让这一格能点。
+              // 时间轴本身可以按住横向拖动,所以拖动过程中不能触发跳转(见 onClick)。
+              if (!item.providerUrl) {
+                return (
+                  <div key={item.index} className={tone}>
+                    {inner}
+                  </div>
+                );
+              }
+              return (
+                <a
+                  key={item.index}
+                  className={[tone, "is-linked"].filter(Boolean).join(" ")}
+                  href={item.providerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`前往 ${item.providerName || "服务商"} 续费`}
+                  onClick={(event) => {
+                    if (dragRef.current.moved) event.preventDefault();
+                  }}
+                >
+                  {inner}
+                </a>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1603,7 +1638,9 @@ function ForwardTrafficChart({ traffic }: { traffic: ForwardChainTraffic }) {
                 <b>{forwardTrafficFmt(srv.daily_gb[hover] || 0)}</b>
               </span>
             ))}
-            <span className="sum">合计 {forwardTrafficFmt(dayTotal[hover])}</span>
+            <span className="sum">
+              合计 {forwardTrafficFmt(dayTotal[hover])}
+            </span>
           </>
         ) : (
           <span className="total">
@@ -2886,6 +2923,7 @@ export function PremiumProbePage({
           <span className="premium-probe-live">实时更新</span>
           <div className="premium-probe-theme-switch">
             <ThemeSwitch appearance={data?.appearance} />
+            <PasskeyLogin />
           </div>
           <div className="premium-probe-view-toggle">
             <button

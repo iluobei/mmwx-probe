@@ -68,6 +68,7 @@ import type {
 } from "./types";
 import { useProbe } from "./use-probe";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { PasskeyLogin } from "./PasskeyLogin";
 import { Twemoji } from "./Twemoji";
 import { displayServerName } from "./server-name";
 import {
@@ -1760,6 +1761,7 @@ export function App() {
         </div>
         <nav>
           <ThemeSwitch appearance={data.appearance} />
+          <PasskeyLogin />
           <button
             aria-label="卡片视图"
             title="卡片视图"

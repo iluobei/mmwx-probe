@@ -2446,7 +2446,8 @@
   );
 }
 
-.premium-probe-renewal-track > div {
+.premium-probe-renewal-track > div,
+.premium-probe-renewal-track > a {
   position: relative;
   display: grid;
   width: 178px;
@@ -2456,7 +2457,8 @@
   padding: 0 0.5rem;
 }
 
-.premium-probe-renewal-track > div > i {
+.premium-probe-renewal-track > div > i,
+.premium-probe-renewal-track > a > i {
   z-index: 1;
   width: 0.56rem;
   height: 0.56rem;
@@ -4207,4 +4209,23 @@
 }
 :root.light .premium-probe-forward-chart-head .d {
   color: #241e14;
+}
+
+/* 续费时间轴:填了服务商 URL 的格子可点进去续费(与主面板 premium 探针一致)。 */
+.premium-probe-renewal-track > a.is-linked {
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.premium-probe-renewal-track > a.is-linked:hover {
+  border-color: var(--pp-gold, #d7a63d);
+  transform: translateY(-1px);
+}
+
+.premium-probe-renewal-track > a.is-linked:focus-visible {
+  outline: 2px solid var(--pp-gold, #d7a63d);
+  outline-offset: 2px;
 }
