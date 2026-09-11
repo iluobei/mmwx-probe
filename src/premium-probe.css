@@ -3517,6 +3517,14 @@
   background: #fbf8f0;
 }
 
+/* select 元素本身写死了 color:#eee5d3 + color-scheme:dark(给暗色用),会盖过 label
+   继承来的深色 —— 于是「服务器」右边的选中值(如「香港 Neburst」)、「探测目标」的
+   「显示所有探测目标」在白底上看不清(用户实报)。单独把选中值压深并切回 light。 */
+:root.light .premium-probe-network-view-heading select {
+  color: #2c251a;
+  color-scheme: light;
+}
+
 :root.light .premium-probe-chart-tooltip,
 :root.light .premium-probe-multi-tooltip {
   color: #241e14;
@@ -4308,6 +4316,40 @@
 /* 热力图空格子(0%)底色近白,补一道极淡描边让边界可循 */
 :root.light .premium-probe-heatmap b {
   border-color: rgba(168, 124, 34, 0.22);
+}
+
+/* 第二轮(对比度审计补漏):各排行/时间轴里的服务器名、价格、子标题仍继承奶油/浅金,
+   在白底上对比只有 1.6–2.5:1。服务器名压到主文字色,价格用金色强调档,子标题用次要档,
+   到期/过期天数保持告警红。 */
+:root.light .premium-probe-server-name,
+:root.light .premium-probe-billing-rank > div:not(.is-head) > span,
+:root.light .premium-probe-renewal-track span {
+  color: #2c251a;
+}
+:root.light .premium-probe-billing-rank > .is-head span,
+:root.light .premium-probe-renewal-track time {
+  color: #6b6152;
+}
+:root.light .premium-probe-renewal-track small,
+:root.light .premium-probe-renewal-track strong {
+  color: #8a5f12;
+}
+:root.light .premium-probe-renewal-track .is-due strong,
+:root.light .premium-probe-renewal-track .is-expired strong {
+  color: #c0342c;
+}
+
+/* 地图视图:「在线」绿色数字 #72cf72 在白底对比仅 1.76 —— 压成可读森林绿(仍是绿);
+   热点排行的服务器名同样压深。金色 hero 数字保留品牌 gold(临界可接受,不动)。 */
+:root.light .premium-probe-kpis strong,
+:root.light .premium-probe-network-kpis strong {
+  color: #8a5f12; /* 与资源视图的账单/额度 hero 数字统一(那边已压深) */
+}
+:root.light .premium-probe-kpis button:nth-child(2) strong {
+  color: #1a7f37; /* 在线:可读森林绿(比默认 #72cf72 深) */
+}
+:root.light .premium-probe-hotspot-list > div > span {
+  color: #2c251a;
 }
 
 /* 续费时间轴:填了服务商 URL 的格子可点进去续费(与主面板 premium 探针一致)。 */
