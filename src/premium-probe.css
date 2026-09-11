@@ -3172,12 +3172,32 @@
 }
 
 @media (max-width: 760px) {
+  /* 移动端 topbar 竖排两行:标题行(logo+名称+PRO)占满整行、名称不再被右侧一堆控件
+     挤成「纠…」;控件行(主题/passkey/视图切换)落到下面右对齐。顺带缩小 logo 与标题,
+     让 sticky 头不至于太高。 */
   .premium-probe-topbar {
-    align-items: flex-start;
-    padding: 0.7rem 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+    min-height: 0;
+    padding: 0.65rem 1rem;
+  }
+  .premium-probe-topbar > div {
+    min-width: 0;
+    gap: 0.5rem;
+  }
+  .premium-probe-topbar img {
+    height: 40px;
+    max-width: 96px;
+  }
+  .premium-probe-topbar h1 {
+    flex: 1;
+    min-width: 0;
+    font-size: 1.2rem;
   }
   .premium-probe-topbar nav {
-    gap: 0.35rem;
+    justify-content: flex-end;
+    gap: 0.4rem;
   }
   .premium-probe-live,
   .premium-probe-license {
