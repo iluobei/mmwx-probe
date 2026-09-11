@@ -311,7 +311,21 @@
   border-radius: 0.48rem;
 }
 
-.premium-probe-theme-switch .probe-theme-switch {
+/* passkey 登录按钮与主题切换按钮并排,统一成两个等大图标按钮(原来 passkey 是裸按钮,
+   样式与旁边的主题切换不一致 —— 用户实报)。容器给 inline-flex + gap 保证间距均匀。 */
+.premium-probe-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.premium-probe-theme-switch .probe-passkey-login {
+  display: inline-flex;
+  align-items: center;
+}
+
+.premium-probe-theme-switch .probe-theme-switch,
+.premium-probe-theme-switch .probe-passkey-login button {
   width: 36px;
   height: 36px;
   display: inline-flex;
@@ -321,12 +335,19 @@
   border: 1px solid rgba(216, 180, 106, 0.3);
   border-radius: 0.48rem;
   background: rgba(216, 180, 106, 0.04);
+  cursor: pointer;
 }
 
-.premium-probe-theme-switch .probe-theme-switch:hover {
+.premium-probe-theme-switch .probe-theme-switch:hover,
+.premium-probe-theme-switch .probe-passkey-login button:hover {
   color: var(--pp-gold-bright);
   border-color: rgba(242, 210, 139, 0.62);
   background: rgba(216, 180, 106, 0.1);
+}
+
+.premium-probe-theme-switch .probe-passkey-login button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .premium-probe-view-toggle button {
@@ -3300,13 +3321,15 @@
   box-shadow: 0 1px 2px rgba(36, 30, 20, 0.07);
 }
 
-:root.light .premium-probe-theme-switch .probe-theme-switch {
+:root.light .premium-probe-theme-switch .probe-theme-switch,
+:root.light .premium-probe-theme-switch .probe-passkey-login button {
   color: #8a6210;
   border-color: rgba(168, 124, 34, 0.34);
   background: rgba(168, 124, 34, 0.06);
 }
 
-:root.light .premium-probe-theme-switch .probe-theme-switch:hover {
+:root.light .premium-probe-theme-switch .probe-theme-switch:hover,
+:root.light .premium-probe-theme-switch .probe-passkey-login button:hover {
   color: #6f4e0c;
   border-color: rgba(168, 124, 34, 0.58);
   background: rgba(168, 124, 34, 0.12);
@@ -4209,6 +4232,62 @@
 }
 :root.light .premium-probe-forward-chart-head .d {
   color: #241e14;
+}
+
+/* ------------------------------------------------------------------------
+ * 浅色模式的对比度补丁(与内置探针同步)
+ *
+ * 这套配色先做暗色再补 light,一批文字色写死成奶白 / 浅金(#eee4cf、#e8ca7e 这类)——
+ * 深色卡片上没问题,搬到香槟白底上几乎看不见。用户实报:「premium 主题亮色文字颜色太浅」,
+ * 截图里近 7 日流量 / 资源压力热力图 / 账单与成本 / 续费时间轴的标题与数字全是这个问题。
+ * 按语义分组压深(而非逐条挑色):数值强调 → #8a5f12(白面约 5.6:1);标题正文 → #241e14;
+ * 次要说明 → #6b6152;语义色(告警红 / 注意黄)单独给白底能看清的深变体。
+ * ------------------------------------------------------------------------ */
+:root.light .premium-probe-hotspot-list strong,
+:root.light .premium-probe-network-history strong,
+:root.light .premium-probe-command-kpis strong,
+:root.light .premium-probe-billing-kpis strong,
+:root.light .premium-probe-billing-rank strong,
+:root.light .premium-probe-quota-rank strong,
+:root.light .premium-probe-renewal-totals strong,
+:root.light .premium-probe-renewal-track strong,
+:root.light .premium-probe-smart-summary > svg {
+  color: #8a5f12;
+}
+
+:root.light .premium-probe-insight-card > header h3,
+:root.light .premium-probe-drawer > header h2,
+:root.light .premium-probe-server-footer strong,
+:root.light .premium-probe-heatmap b,
+:root.light .premium-probe-target-toolbar button:hover {
+  color: #241e14;
+}
+
+:root.light .premium-probe-heatmap span,
+:root.light .premium-probe-command-nodes span,
+:root.light .premium-probe-network-history time,
+:root.light .premium-probe-server-footer small,
+:root.light .premium-probe-heatmap .is-head b,
+:root.light .premium-probe-heatmap .is-head span {
+  color: #6b6152;
+}
+
+/* 语义色:白底上要压深才看得清 */
+:root.light .premium-probe-network-row > strong[data-level="medium"] {
+  color: #a2701a;
+}
+
+:root.light .premium-probe-kpis button:nth-child(3) strong,
+:root.light .premium-probe-network-row > strong[data-level="poor"],
+:root.light .premium-probe-renewal-track .is-due strong,
+:root.light .premium-probe-health-score[data-tone="warning"],
+:root.light .premium-probe-drawer-health > strong[data-tone="warning"] {
+  color: #c0342c;
+}
+
+/* 热力图空格子(0%)底色近白,补一道极淡描边让边界可循 */
+:root.light .premium-probe-heatmap b {
+  border-color: rgba(168, 124, 34, 0.22);
 }
 
 /* 续费时间轴:填了服务商 URL 的格子可点进去续费(与主面板 premium 探针一致)。 */

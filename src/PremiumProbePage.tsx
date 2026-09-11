@@ -605,15 +605,24 @@ function RenewalTimeline({
               scrollLeft: track.scrollLeft,
               moved: false,
             };
-            track.setPointerCapture(event.pointerId);
+            // 关键(#575):这里**不**立即 setPointerCapture。一旦捕获,Chrome 会把随后的
+            // click 改派到捕获元素(本 div)而非被点的 <a>,导致 <a> 的原生跳转永不触发 ——
+            // 「点续费服务器跳不过去」的真凶。改成「确认是拖动后再捕获」(见 onPointerMove)。
           }}
           onPointerMove={(event) => {
             const track = trackRef.current;
             if (!track || !dragRef.current.active) return;
             const dx = event.clientX - dragRef.current.startX;
-            // 4px 的容差:点击时手指/鼠标难免抖一两个像素,不该算成拖动。
-            if (Math.abs(dx) > 4) dragRef.current.moved = true;
-            track.scrollLeft = dragRef.current.scrollLeft - dx;
+            // 4px 的容差:点击时手指/鼠标难免抖一两个像素,不该算成拖动。超过阈值才判定为
+            // 拖动 —— 此刻才捕获指针,好让拖动能拖出轨道范围继续滚动;纯点击永远走不到这里,
+            // 于是 <a> 的原生 click 不被 setPointerCapture 改派吃掉,跳转正常。
+            if (Math.abs(dx) > 4 && !dragRef.current.moved) {
+              dragRef.current.moved = true;
+              track.setPointerCapture(event.pointerId);
+            }
+            if (dragRef.current.moved) {
+              track.scrollLeft = dragRef.current.scrollLeft - dx;
+            }
           }}
           onPointerUp={() => {
             dragRef.current.active = false;
