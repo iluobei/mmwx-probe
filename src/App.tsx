@@ -1139,9 +1139,12 @@ export function UnlockTabbedList({
               <li key={u.service} title={unlockTitle(u, true)}>
                 <UnlockServiceIcon meta={meta} />
                 <span className="unlock-row-label">{meta.label}</span>
-                <span className="unlock-row-status" data-tone={st.tone}>
+                <span
+                  className="unlock-row-status"
+                  data-tone={meta.info ? "info" : st.tone}
+                >
                   <span>{unlockStatusText(u, true)}</span>
-                  <UnlockStateIcon tone={st.tone} />
+                  {!meta.info && <UnlockStateIcon tone={st.tone} />}
                 </span>
               </li>
             );
