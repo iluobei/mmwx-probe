@@ -4370,3 +4370,38 @@
   outline: 2px solid var(--pp-gold, #d7a63d);
   outline-offset: 2px;
 }
+
+/* 三网延迟:在「延迟」「丢包」两个格子里各堆三行。
+   刻意不改 .premium-probe-network-row 的 grid-template-columns —— 那四列宽度是按
+   「服务器 | 延迟 | 丢包 | 图表」调过的,合并格子会让表头对不上;
+   两侧都是三行等高,列自然仍然对齐。行高本来就有富余,装得下三行。
+   与主控 miaomiaowuX 的同名样式保持一致 —— 内外探针画的是同一份数据。 */
+.premium-probe-network-tri {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.premium-probe-network-tri > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.premium-probe-network-tri > span > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: rgba(216, 180, 106, 0.66);
+}
+
+.premium-probe-network-tri > span > strong {
+  flex-shrink: 0;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}

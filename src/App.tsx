@@ -1,4 +1,5 @@
 import {
+  Fragment,
   lazy,
   Suspense,
   useEffect,
@@ -60,11 +61,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { triISPRows } from "./tri-isp";
 import type {
   ProbeBucket,
   ProbePingSeries,
   ProbeReturnRoute,
   ProbeServer,
+  TriISPPublic,
 } from "./types";
 import { useProbe } from "./use-probe";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -836,9 +839,11 @@ function TrendDialog({
 function PingPanel({
   ping,
   serverIndex,
+  triISP,
 }: {
   ping: ProbePingSeries[];
   serverIndex: number;
+  triISP?: TriISPPublic;
 }) {
   const [mode, setMode] = useState<"latency" | "loss" | null>(null);
   const [selected, setSelected] = useState("__avg__");
@@ -865,59 +870,95 @@ function PingPanel({
               : "good";
       return <i key={index} className={level} />;
     });
+  // 三网行按 key 从本机实测序列里取 —— 与主控同一套 triISPRows,
+  // 两处画的是同一份数据,匹配规则不一致会让同一台机器在内外探针上显示不同。
+  const triRows = triISPRows(triISP, ping);
+
   return (
     <>
-      <div className="ping-grid">
-        <div className="ping-head">
-          <span>
-            <Clock size={14} />
-            <select
-              value={selected}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              <option value="__avg__">平均</option>
-              {ping.map((item) => (
-                <option
-                  key={item.key || item.label}
-                  value={item.key || item.label}
+      {triRows.length > 0 ? (
+        <div className="ping-grid">
+          {/* 三网模式:延迟与丢包按电信/联通/移动分三行,沿用同一套两列网格 ——
+              两侧表头落在同一 grid 行里才会等高。匹配不到的槽位照样成行画「—」:
+              直接跳过会让三行变两行,而「移动没数据」本身就是要给人看的信息。 */}
+          {triRows.map((row) => (
+            <Fragment key={row.isp}>
+              <div className="ping-head">
+                <span>{row.label}</span>
+                <strong>
+                  {!row.series
+                    ? "—"
+                    : row.series.current_ms < 0
+                      ? "超时"
+                      : `${row.series.current_ms.toFixed(0)} ms`}
+                </strong>
+              </div>
+              <div className="ping-head">
+                <span>丢包率</span>
+                <strong
+                  className={
+                    row.series && row.series.loss_pct > 0 ? "warning" : ""
+                  }
                 >
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </span>
-          <strong>
-            {current.current_ms < 0
-              ? "超时"
-              : `${current.current_ms.toFixed(0)} ms`}
-          </strong>
+                  {!row.series ? "—" : `${row.series.loss_pct.toFixed(1)}%`}
+                </strong>
+              </div>
+            </Fragment>
+          ))}
         </div>
-        <div className="ping-head">
-          <span>
-            <Wifi size={14} />
-            丢包率
-          </span>
-          <strong className={current.loss_pct > 0 ? "warning" : ""}>
-            {current.loss_pct.toFixed(1)}%
-          </strong>
+      ) : (
+        <div className="ping-grid">
+          <div className="ping-head">
+            <span>
+              <Clock size={14} />
+              <select
+                value={selected}
+                onChange={(event) => setSelected(event.target.value)}
+              >
+                <option value="__avg__">平均</option>
+                {ping.map((item) => (
+                  <option
+                    key={item.key || item.label}
+                    value={item.key || item.label}
+                  >
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <strong>
+              {current.current_ms < 0
+                ? "超时"
+                : `${current.current_ms.toFixed(0)} ms`}
+            </strong>
+          </div>
+          <div className="ping-head">
+            <span>
+              <Wifi size={14} />
+              丢包率
+            </span>
+            <strong className={current.loss_pct > 0 ? "warning" : ""}>
+              {current.loss_pct.toFixed(1)}%
+            </strong>
+          </div>
+          <button
+            className="ping-blocks"
+            type="button"
+            aria-label="查看延迟趋势"
+            onClick={() => setMode("latency")}
+          >
+            {blocks("latency")}
+          </button>
+          <button
+            className="ping-blocks"
+            type="button"
+            aria-label="查看丢包率趋势"
+            onClick={() => setMode("loss")}
+          >
+            {blocks("loss")}
+          </button>
         </div>
-        <button
-          className="ping-blocks"
-          type="button"
-          aria-label="查看延迟趋势"
-          onClick={() => setMode("latency")}
-        >
-          {blocks("latency")}
-        </button>
-        <button
-          className="ping-blocks"
-          type="button"
-          aria-label="查看丢包率趋势"
-          onClick={() => setMode("loss")}
-        >
-          {blocks("loss")}
-        </button>
-      </div>
+      )}
       {mode && (
         <TrendDialog
           serverIndex={serverIndex}
@@ -1009,7 +1050,15 @@ function ReturnRouteBadges({
   );
 }
 
-function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
+function ServerCard({
+  server,
+  index,
+  triISP,
+}: {
+  server: ProbeServer;
+  index: number;
+  triISP?: TriISPPublic;
+}) {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const name = server.name || `服务器 ${index + 1}`;
   const flag = regionFlag(server.region_country || server.region);
@@ -1128,7 +1177,7 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
         </div>
       )}
       {!!server.ping?.length && (
-        <PingPanel ping={server.ping} serverIndex={index} />
+        <PingPanel ping={server.ping} serverIndex={index} triISP={triISP} />
       )}
       {!!server.return_routes?.length && (
         <ReturnRouteBadges
@@ -1940,6 +1989,7 @@ export function App() {
                 key={server.name}
                 server={server}
                 index={servers.indexOf(server)}
+                triISP={data?.tri_isp}
               />
             ))
           ) : (

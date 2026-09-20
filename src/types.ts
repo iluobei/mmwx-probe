@@ -126,6 +126,17 @@ export interface ForwardChainData {
   traffic?: ForwardChainTraffic | null;
 }
 
+export interface TriISPPublicSlot {
+  isp: string;
+  key: string;
+  label: string;
+}
+
+export interface TriISPPublic {
+  enabled?: boolean;
+  targets?: TriISPPublicSlot[];
+}
+
 export interface ProbePayload {
   enabled: boolean;
   forward?: ForwardChainData[];
@@ -137,6 +148,9 @@ export interface ProbePayload {
   show_traffic_quota?: boolean;
   show_renewal_timeline?: boolean;
   show_health_score?: boolean;
+  /** 三网延迟:哪三个探测点代表电信/联通/移动。主控只下发 isp/key/label ——
+   *  host/port/type 属于探测目标与探测方式,对外页面上从网络面板一眼可见,刻意不带。 */
+  tri_isp?: TriISPPublic;
   title?: string;
   logo?: string;
   icon?: string;
