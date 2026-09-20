@@ -1823,39 +1823,152 @@ footer a:hover {
   }
 }
 
-/* 解锁检测徽标(卡片/表格) */
-.unlock-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 17px;
-  padding: 10px 0 12px;
-  border-top: 1px solid var(--border);
-}
-.table-unlocks .unlock-badges {
-  margin: 0;
-  padding: 0;
-  border-top: 0;
-}
-.unlock-badge {
+/* 解锁检测:系统图标左侧的锁图标 + 悬停弹出面板(portal + fixed) */
+.unlock-hover-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 5px;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1;
-  color: #475569;
-  background: #f8fafc;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-foreground, #64748b);
+  cursor: pointer;
 }
-.unlock-badge strong {
-  max-width: 64px;
+.unlock-hover-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+.unlock-hover-trigger[data-unlocked] {
+  color: #059669;
+}
+:root.dark .unlock-hover-trigger[data-unlocked] {
+  color: #34d399;
+}
+.unlock-popover {
+  position: fixed;
+  z-index: 60;
+  width: 288px;
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card, #fff);
+  color: var(--foreground, #0f172a);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  font-size: 12px;
+}
+.unlock-popover-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.unlock-popover-head span:last-child {
+  font-weight: 400;
+  opacity: 0.65;
+}
+.unlock-popover .unlock-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.unlock-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.06);
+}
+:root.dark .unlock-tabs {
+  background: rgba(255, 255, 255, 0.08);
+}
+.unlock-tabs button {
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 2px;
+  background: none;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.unlock-tabs button small {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+.unlock-tabs button[data-active] {
+  opacity: 1;
+  background: var(--card, #fff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+:root.dark .unlock-tabs button[data-active] {
+  background: rgba(255, 255, 255, 0.12);
+}
+.unlock-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.unlock-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+}
+.unlock-row-label {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+}
+.unlock-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 45%;
+  flex: none;
+}
+.unlock-row-status > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unlock-row-status[data-tone="ok"] {
+  color: #047857;
+}
+.unlock-row-status[data-tone="partial"] {
+  color: #b45309;
+}
+.unlock-row-status[data-tone="bad"] {
+  color: #64748b;
+}
+.unlock-row-status[data-tone="banned"] {
+  color: #e11d48;
+}
+.unlock-row-status[data-tone="muted"] {
+  color: #94a3b8;
+}
+:root.dark .unlock-row-status[data-tone="ok"] {
+  color: #6ee7b7;
+}
+:root.dark .unlock-row-status[data-tone="partial"] {
+  color: #fcd34d;
+}
+:root.dark .unlock-row-status[data-tone="bad"] {
+  color: #94a3b8;
+}
+:root.dark .unlock-row-status[data-tone="banned"] {
+  color: #fda4af;
+}
+.unlock-empty {
+  margin: 0;
+  padding: 8px 4px;
+  text-align: center;
+  opacity: 0.6;
 }
 .unlock-badge-brand,
 .unlock-badge-lock {
@@ -1876,51 +1989,6 @@ footer a:hover {
   font-weight: 700;
   line-height: 1;
 }
-.unlock-badge[data-tone="ok"] {
-  border-color: #6ee7b7;
-  color: #065f46;
-  background: #ecfdf5;
-}
-.unlock-badge[data-tone="partial"] {
-  border-color: #fcd34d;
-  color: #92400e;
-  background: #fffbeb;
-}
-.unlock-badge[data-tone="banned"] {
-  border-color: #fda4af;
-  color: #be123c;
-  background: #fff1f2;
-}
-.unlock-badge[data-tone="muted"] {
-  border-style: dashed;
-  color: #94a3b8;
-  background: transparent;
-}
-:root.dark .unlock-badge {
-  border-color: #334155;
-  color: #94a3b8;
-  background: rgba(15, 23, 42, 0.6);
-}
 :root.dark .unlock-badge-letter {
   background: rgba(255, 255, 255, 0.15);
-}
-:root.dark .unlock-badge[data-tone="ok"] {
-  border-color: #065f46;
-  color: #a7f3d0;
-  background: rgba(6, 78, 59, 0.4);
-}
-:root.dark .unlock-badge[data-tone="partial"] {
-  border-color: #92400e;
-  color: #fde68a;
-  background: rgba(120, 53, 15, 0.4);
-}
-:root.dark .unlock-badge[data-tone="banned"] {
-  border-color: #9f1239;
-  color: #fda4af;
-  background: rgba(136, 19, 55, 0.4);
-}
-:root.dark .unlock-badge[data-tone="muted"] {
-  border-color: #334155;
-  color: #64748b;
-  background: transparent;
 }

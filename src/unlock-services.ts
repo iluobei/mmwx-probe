@@ -19,42 +19,81 @@ type BrandIcon = { path: string };
 
 export type UnlockTone = "ok" | "partial" | "bad" | "banned" | "muted";
 
+export type UnlockCategory = "streaming" | "ai" | "other";
+
+export const UNLOCK_CATEGORIES: {
+  key: UnlockCategory;
+  zh: string;
+  en: string;
+}[] = [
+  { key: "streaming", zh: "流媒体", en: "Streaming" },
+  { key: "ai", zh: "AI", en: "AI" },
+  { key: "other", zh: "其他", en: "Other" },
+];
+
 export type UnlockServiceMeta = {
   key: string;
   label: string;
   short: string;
   icon?: BrandIcon;
+  category: UnlockCategory;
   info?: boolean;
 };
 
+const S: UnlockCategory = "streaming";
+const A: UnlockCategory = "ai";
+const O: UnlockCategory = "other";
+
 export const UNLOCK_SERVICES: UnlockServiceMeta[] = [
-  { key: "netflix", label: "Netflix", short: "N", icon: siNetflix },
-  { key: "disneyplus", label: "Disney+", short: "D+" },
+  {
+    key: "netflix",
+    label: "Netflix",
+    short: "N",
+    icon: siNetflix,
+    category: S,
+  },
+  { key: "disneyplus", label: "Disney+", short: "D+", category: S },
   {
     key: "youtube_premium",
     label: "YouTube Premium",
     short: "YT",
     icon: siYoutube,
+    category: S,
   },
-  { key: "prime_video", label: "Prime Video", short: "PV" },
-  { key: "tvb_anywhere", label: "TVB Anywhere+", short: "TVB" },
-  { key: "iqiyi", label: "iQIYI 国际版", short: "iQ", info: true },
-  { key: "bing", label: "Bing", short: "B", info: true },
-  { key: "apple", label: "Apple 地区", short: "A", icon: siApple, info: true },
-  { key: "openai", label: "ChatGPT", short: "AI" },
-  { key: "gemini", label: "Gemini", short: "G", icon: siGooglegemini },
-  { key: "claude", label: "Claude", short: "C", icon: siClaude },
+  { key: "prime_video", label: "Prime Video", short: "PV", category: S },
+  { key: "tvb_anywhere", label: "TVB Anywhere+", short: "TVB", category: S },
+  { key: "iqiyi", label: "iQIYI 国际版", short: "iQ", category: S, info: true },
+  { key: "bing", label: "Bing", short: "B", category: O, info: true },
+  {
+    key: "apple",
+    label: "Apple 地区",
+    short: "A",
+    icon: siApple,
+    category: O,
+    info: true,
+  },
+  { key: "openai", label: "ChatGPT", short: "AI", category: A },
+  {
+    key: "gemini",
+    label: "Gemini",
+    short: "G",
+    icon: siGooglegemini,
+    category: A,
+  },
+  { key: "claude", label: "Claude", short: "C", icon: siClaude, category: A },
   {
     key: "wikipedia",
     label: "Wikipedia 可编辑",
     short: "W",
     icon: siWikipedia,
+    category: O,
   },
   {
     key: "google_play",
     label: "Google Play",
     short: "GP",
     icon: siGoogleplay,
+    category: O,
     info: true,
   },
   {
@@ -62,16 +101,31 @@ export const UNLOCK_SERVICES: UnlockServiceMeta[] = [
     label: "Google 搜索无验证码",
     short: "G",
     icon: siGoogle,
+    category: O,
   },
-  { key: "steam", label: "Steam 货币", short: "St", icon: siSteam, info: true },
-  { key: "reddit", label: "Reddit", short: "R", icon: siReddit },
-  { key: "dazn", label: "DAZN", short: "DZ", icon: siDazn },
-  { key: "onetrust", label: "OneTrust 地区", short: "1T", info: true },
+  {
+    key: "steam",
+    label: "Steam 货币",
+    short: "St",
+    icon: siSteam,
+    category: O,
+    info: true,
+  },
+  { key: "reddit", label: "Reddit", short: "R", icon: siReddit, category: O },
+  { key: "dazn", label: "DAZN", short: "DZ", icon: siDazn, category: S },
+  {
+    key: "onetrust",
+    label: "OneTrust 地区",
+    short: "1T",
+    category: O,
+    info: true,
+  },
   {
     key: "youtube_cdn",
     label: "YouTube CDN",
     short: "YC",
     icon: siYoutube,
+    category: S,
     info: true,
   },
   {
@@ -79,17 +133,34 @@ export const UNLOCK_SERVICES: UnlockServiceMeta[] = [
     label: "Netflix CDN",
     short: "NC",
     icon: siNetflix,
+    category: S,
     info: true,
   },
-  { key: "sdggge", label: "SD Gundam G Generation Eternal", short: "SD" },
-  { key: "spotify", label: "Spotify 注册", short: "S", icon: siSpotify },
+  {
+    key: "sdggge",
+    label: "SD Gundam G Generation Eternal",
+    short: "SD",
+    category: O,
+  },
+  {
+    key: "spotify",
+    label: "Spotify 注册",
+    short: "S",
+    icon: siSpotify,
+    category: S,
+  },
 ];
 
 const byKey = new Map(UNLOCK_SERVICES.map((s) => [s.key, s]));
 
 export function unlockServiceMeta(key: string): UnlockServiceMeta {
   return (
-    byKey.get(key) ?? { key, label: key, short: key.slice(0, 2).toUpperCase() }
+    byKey.get(key) ?? {
+      key,
+      label: key,
+      short: key.slice(0, 2).toUpperCase(),
+      category: "other",
+    }
   );
 }
 
@@ -108,6 +179,18 @@ export function unlockStatusMeta(status: string) {
   return STATUS_META[status] ?? STATUS_META.failed;
 }
 
+export function isUnlocked(status: string): boolean {
+  return status === "yes" || status === "originals_only";
+}
+
+export function unlockStatusText(u: ProbeUnlock, zh: boolean): string {
+  const meta = unlockServiceMeta(u.service);
+  const st = unlockStatusMeta(u.status);
+  if (meta.info && u.status === "yes") return u.region || "—";
+  const label = zh ? st.zh : st.en;
+  return u.region ? `${label} · ${u.region}` : label;
+}
+
 export function unlockTitle(u: ProbeUnlock, zh: boolean): string {
   const meta = unlockServiceMeta(u.service);
   const st = unlockStatusMeta(u.status);
@@ -118,4 +201,20 @@ export function unlockTitle(u: ProbeUnlock, zh: boolean): string {
   return u.region
     ? `${meta.label} · ${label} (${u.region})`
     : `${meta.label} · ${label}`;
+}
+
+export function groupUnlocks(
+  unlocks: ProbeUnlock[],
+): Record<UnlockCategory, ProbeUnlock[]> {
+  const order = new Map(UNLOCK_SERVICES.map((s, i) => [s.key, i]));
+  const sorted = [...unlocks].sort(
+    (a, b) => (order.get(a.service) ?? 999) - (order.get(b.service) ?? 999),
+  );
+  const out: Record<UnlockCategory, ProbeUnlock[]> = {
+    streaming: [],
+    ai: [],
+    other: [],
+  };
+  for (const u of sorted) out[unlockServiceMeta(u.service).category].push(u);
+  return out;
 }

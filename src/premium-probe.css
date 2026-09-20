@@ -4406,51 +4406,27 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 解锁检测(抽屉内,与三网回程同排版) */
+/* 解锁检测(抽屉内):选项卡 + 逐行列表,沿用抽屉的金色文字系 */
 .premium-probe-drawer-unlocks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  font-size: 0.64rem;
+  color: #c9b98a;
 }
 
-.premium-probe-drawer-unlocks > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.45rem;
-  border: 1px solid rgba(216, 180, 106, 0.34);
-  border-radius: 0.25rem;
-  font-size: 0.6rem;
+.premium-probe-drawer-unlocks .unlock-tabs {
+  background: rgba(216, 180, 106, 0.08);
+}
+
+.premium-probe-drawer-unlocks .unlock-tabs button {
   color: #957f50;
-  background: rgba(216, 180, 106, 0.07);
 }
 
-.premium-probe-drawer-unlocks > span[data-tone="ok"] {
+.premium-probe-drawer-unlocks .unlock-tabs button[data-active] {
+  background: rgba(216, 180, 106, 0.18);
   color: #e2cc98;
-  border-color: rgba(216, 180, 106, 0.6);
 }
 
-.premium-probe-drawer-unlocks > span[data-tone="partial"] {
-  color: #d9a441;
-}
-
-.premium-probe-drawer-unlocks > span[data-tone="banned"] {
-  color: #c0645a;
-  border-color: rgba(192, 100, 90, 0.5);
-}
-
-.premium-probe-drawer-unlocks > span[data-tone="muted"] {
-  opacity: 0.55;
-  border-style: dashed;
-}
-
-.premium-probe-drawer-unlocks svg {
-  width: 0.7rem;
-  height: 0.7rem;
-}
-
-.premium-probe-drawer-unlocks b {
-  font-weight: 600;
+.premium-probe-drawer-unlocks li {
+  border-bottom: 1px solid rgba(216, 180, 106, 0.12);
 }
 
 .premium-probe-drawer-unlocks p {

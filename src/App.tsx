@@ -66,9 +66,14 @@ import {
 } from "recharts";
 import { triISPRows } from "./tri-isp";
 import {
+  UNLOCK_CATEGORIES,
+  groupUnlocks,
+  isUnlocked,
   unlockServiceMeta,
   unlockStatusMeta,
+  unlockStatusText,
   unlockTitle,
+  type UnlockCategory,
   type UnlockServiceMeta,
   type UnlockTone,
 } from "./unlock-services";
@@ -1092,26 +1097,137 @@ export function UnlockStateIcon({ tone }: { tone: UnlockTone }) {
   return <LockKeyhole aria-hidden="true" className="unlock-badge-lock" />;
 }
 
-function UnlockBadges({ unlocks }: { unlocks: ProbeUnlock[] }) {
+export function UnlockTabbedList({
+  unlocks,
+  className,
+}: {
+  unlocks: ProbeUnlock[];
+  className?: string;
+}) {
+  const [tab, setTab] = useState<UnlockCategory>("streaming");
+  const groups = groupUnlocks(unlocks);
+  const rows = groups[tab];
   return (
-    <div className="unlock-badges">
-      {unlocks.map((u) => {
-        const meta = unlockServiceMeta(u.service);
-        const st = unlockStatusMeta(u.status);
-        return (
-          <span
-            key={u.service}
-            className="unlock-badge"
-            data-tone={st.tone}
-            title={unlockTitle(u, true)}
-          >
-            <UnlockServiceIcon meta={meta} />
-            {u.region && <strong>{u.region}</strong>}
-            <UnlockStateIcon tone={st.tone} />
-          </span>
-        );
-      })}
+    <div className={className ? `unlock-list ${className}` : "unlock-list"}>
+      <div className="unlock-tabs">
+        {UNLOCK_CATEGORIES.map((c) => {
+          const list = groups[c.key];
+          const ok = list.filter((u) => isUnlocked(u.status)).length;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              data-active={tab === c.key || undefined}
+              onClick={() => setTab(c.key)}
+            >
+              {c.zh}
+              <small>
+                {ok}/{list.length}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      {rows.length === 0 ? (
+        <p className="unlock-empty">—</p>
+      ) : (
+        <ul>
+          {rows.map((u) => {
+            const meta = unlockServiceMeta(u.service);
+            const st = unlockStatusMeta(u.status);
+            return (
+              <li key={u.service} title={unlockTitle(u, true)}>
+                <UnlockServiceIcon meta={meta} />
+                <span className="unlock-row-label">{meta.label}</span>
+                <span className="unlock-row-status" data-tone={st.tone}>
+                  <span>{unlockStatusText(u, true)}</span>
+                  <UnlockStateIcon tone={st.tone} />
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function UnlockHoverIcon({ unlocks }: { unlocks: ProbeUnlock[] }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number }>();
+  const anchor = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const unlocked = unlocks.filter((u) => isUnlocked(u.status)).length;
+
+  const show = () => {
+    window.clearTimeout(closeTimer.current);
+    const r = anchor.current?.getBoundingClientRect();
+    if (r) {
+      setPos({
+        top: r.bottom + 6,
+        right: Math.max(8, window.innerWidth - r.right),
+      });
+    }
+    setOpen(true);
+  };
+  const hide = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
+  };
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  const label = `解锁 ${unlocked}/${unlocks.length}`;
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className="unlock-hover-trigger"
+        data-unlocked={unlocked > 0 || undefined}
+        aria-label={label}
+        aria-expanded={open}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onClick={() => (open ? setOpen(false) : show())}
+      >
+        {unlocked > 0 ? (
+          <LockKeyholeOpen aria-hidden="true" />
+        ) : (
+          <LockKeyhole aria-hidden="true" />
+        )}
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-label={label}
+            className="unlock-popover"
+            style={{ top: pos.top, right: pos.right }}
+            onMouseEnter={() => window.clearTimeout(closeTimer.current)}
+            onMouseLeave={hide}
+          >
+            <div className="unlock-popover-head">
+              <span>解锁检测</span>
+              <span>
+                {unlocked}/{unlocks.length}
+              </span>
+            </div>
+            <UnlockTabbedList unlocks={unlocks} />
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -1139,6 +1255,9 @@ function ServerCard({
             {displayServerName(name, `服务器 ${index + 1}`, flag)}
           </Twemoji>
         </h2>
+        {!!server.unlocks?.length && (
+          <UnlockHoverIcon unlocks={server.unlocks} />
+        )}
         <span title={systemTitle(server)}>
           <SystemIcon server={server} />
         </span>
@@ -1250,7 +1369,6 @@ function ServerCard({
           telecomPaidPeer={server.telecom_paid_peer}
         />
       )}
-      {!!server.unlocks?.length && <UnlockBadges unlocks={server.unlocks} />}
       {(server.expires_at || server.renewal_price !== undefined) && (
         <div className="server-meta">
           {server.expires_at &&
@@ -1556,7 +1674,6 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
               <th>本次开机网卡</th>
               <th>延迟</th>
               <th>三网回程</th>
-              <th>解锁</th>
             </tr>
           </thead>
           <tbody>
@@ -1589,6 +1706,9 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                             regionFlag(server.region_country || server.region),
                           )}
                         </Twemoji>
+                      )}
+                      {!!server.unlocks?.length && (
+                        <UnlockHoverIcon unlocks={server.unlocks} />
                       )}
                       <span title={systemTitle(server)}>
                         <SystemIcon server={server} />
@@ -1631,13 +1751,6 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                         routes={server.return_routes}
                         telecomPaidPeer={server.telecom_paid_peer}
                       />
-                    ) : (
-                      <span className="dash">—</span>
-                    )}
-                  </td>
-                  <td className="table-unlocks">
-                    {server.unlocks?.length ? (
-                      <UnlockBadges unlocks={server.unlocks} />
                     ) : (
                       <span className="dash">—</span>
                     )}
