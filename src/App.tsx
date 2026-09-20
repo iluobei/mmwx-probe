@@ -17,6 +17,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
+  CircleHelp,
   Clock,
   Cpu,
   Gauge,
@@ -24,6 +25,8 @@ import {
   HardDrive,
   LayoutGrid,
   List,
+  LockKeyhole,
+  LockKeyholeOpen,
   MapPin,
   MemoryStick,
   Monitor,
@@ -62,10 +65,18 @@ import {
   YAxis,
 } from "recharts";
 import { triISPRows } from "./tri-isp";
+import {
+  unlockServiceMeta,
+  unlockStatusMeta,
+  unlockTitle,
+  type UnlockServiceMeta,
+  type UnlockTone,
+} from "./unlock-services";
 import type {
   ProbeBucket,
   ProbePingSeries,
   ProbeReturnRoute,
+  ProbeUnlock,
   ProbeServer,
   TriISPPublic,
 } from "./types";
@@ -1050,6 +1061,60 @@ function ReturnRouteBadges({
   );
 }
 
+export function UnlockServiceIcon({ meta }: { meta: UnlockServiceMeta }) {
+  if (meta.icon) {
+    return (
+      <svg
+        aria-hidden="true"
+        className="unlock-badge-brand"
+        role="img"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path d={meta.icon.path} />
+      </svg>
+    );
+  }
+  return (
+    <span aria-hidden="true" className="unlock-badge-letter">
+      {meta.short}
+    </span>
+  );
+}
+
+export function UnlockStateIcon({ tone }: { tone: UnlockTone }) {
+  if (tone === "ok" || tone === "partial") {
+    return <LockKeyholeOpen aria-hidden="true" className="unlock-badge-lock" />;
+  }
+  if (tone === "muted") {
+    return <CircleHelp aria-hidden="true" className="unlock-badge-lock" />;
+  }
+  return <LockKeyhole aria-hidden="true" className="unlock-badge-lock" />;
+}
+
+function UnlockBadges({ unlocks }: { unlocks: ProbeUnlock[] }) {
+  return (
+    <div className="unlock-badges">
+      {unlocks.map((u) => {
+        const meta = unlockServiceMeta(u.service);
+        const st = unlockStatusMeta(u.status);
+        return (
+          <span
+            key={u.service}
+            className="unlock-badge"
+            data-tone={st.tone}
+            title={unlockTitle(u, true)}
+          >
+            <UnlockServiceIcon meta={meta} />
+            {u.region && <strong>{u.region}</strong>}
+            <UnlockStateIcon tone={st.tone} />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ServerCard({
   server,
   index,
@@ -1185,6 +1250,7 @@ function ServerCard({
           telecomPaidPeer={server.telecom_paid_peer}
         />
       )}
+      {!!server.unlocks?.length && <UnlockBadges unlocks={server.unlocks} />}
       {(server.expires_at || server.renewal_price !== undefined) && (
         <div className="server-meta">
           {server.expires_at &&
@@ -1490,6 +1556,7 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
               <th>本次开机网卡</th>
               <th>延迟</th>
               <th>三网回程</th>
+              <th>解锁</th>
             </tr>
           </thead>
           <tbody>
@@ -1564,6 +1631,13 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                         routes={server.return_routes}
                         telecomPaidPeer={server.telecom_paid_peer}
                       />
+                    ) : (
+                      <span className="dash">—</span>
+                    )}
+                  </td>
+                  <td className="table-unlocks">
+                    {server.unlocks?.length ? (
+                      <UnlockBadges unlocks={server.unlocks} />
                     ) : (
                       <span className="dash">—</span>
                     )}

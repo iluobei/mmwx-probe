@@ -15,6 +15,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { triISPRows } from "./tri-isp";
+import { UnlockServiceIcon, UnlockStateIcon } from "./App";
+import {
+  unlockServiceMeta,
+  unlockStatusMeta,
+  unlockTitle,
+} from "./unlock-services";
 import type {
   ForwardChainBucket,
   ForwardChainData,
@@ -2763,6 +2769,31 @@ function ServerDetailDrawer({
                   </small>
                 </span>
               ))
+            )}
+          </div>
+        </section>
+        <section className="premium-probe-drawer-section">
+          <h3>解锁检测</h3>
+          <div className="premium-probe-drawer-unlocks">
+            {(server.unlocks || []).length === 0 ? (
+              <p>暂无解锁数据</p>
+            ) : (
+              (server.unlocks || []).map((item) => {
+                const meta = unlockServiceMeta(item.service);
+                const st = unlockStatusMeta(item.status);
+                return (
+                  <span
+                    key={item.service}
+                    data-tone={st.tone}
+                    title={unlockTitle(item, true)}
+                  >
+                    <UnlockServiceIcon meta={meta} />
+                    <b>{item.region || st.zh}</b>
+                    <small>{meta.label}</small>
+                    <UnlockStateIcon tone={st.tone} />
+                  </span>
+                );
+              })
             )}
           </div>
         </section>

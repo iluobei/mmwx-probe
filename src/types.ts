@@ -79,6 +79,14 @@ export interface ProbeServer {
   provider_url?: string;
   telecom_paid_peer?: boolean;
   return_routes?: ProbeReturnRoute[];
+  unlocks?: ProbeUnlock[];
+}
+
+export interface ProbeUnlock {
+  service: string;
+  status: string;
+  region?: string;
+  tested_at?: string;
 }
 
 export interface ProbeReturnRoute {
