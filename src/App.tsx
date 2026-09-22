@@ -201,12 +201,12 @@ function HorizontalChart({
   );
 }
 
-function bytes(value = 0, decimal = true): string {
+function bytes(value = 0, decimal = true, base = 1024): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let n = Math.max(0, value);
   let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
+  while (n >= base && i < units.length - 1) {
+    n /= base;
     i++;
   }
   return `${n.toFixed(decimal && i >= 2 ? 1 : 0)} ${units[i]}`;
@@ -217,8 +217,11 @@ function signedBytes(value: number): string {
   return `${value > 0 ? "+" : "−"}${bytes(Math.abs(value), false)}`;
 }
 
+// 网速按十进制进位(1 MB/s = 1e6 B/s):汇总卡的 Mbps 天生是十进制,
+// 这里若沿用流量的 1024 进位,单机的 "1.53 MB/s × 8 = 12.2 Mbps" 会和
+// 「网络情况 · 实时汇总」的 12.9 Mbps 对不上(#892)。流量仍按 1024 进位。
 function speed(value = 0): string {
-  return `${bytes(value)}/s`;
+  return `${bytes(value, true, 1000)}/s`;
 }
 function bitSpeed(bytesPerSecond = 0): string {
   let value = Math.max(0, bytesPerSecond) * 8;
