@@ -15,7 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { triISPRows } from "./tri-isp";
-import { UnlockTabbedList } from "./App";
+import { CONN_COUNT_HINT, connCount, UnlockTabbedList } from "./App";
 import type {
   ForwardChainBucket,
   ForwardChainData,
@@ -2795,6 +2795,13 @@ function ServerDetailDrawer({
             <strong>
               {server.cpu_model || "—"}
               {server.cpu_cores ? ` · ${server.cpu_cores} 核` : ""}
+            </strong>
+          </div>
+          <div>
+            <span title={CONN_COUNT_HINT}>系统连接数</span>
+            <strong>
+              TCP {connCount(server.tcp_connections)} · UDP{" "}
+              {connCount(server.udp_connections)}
             </strong>
           </div>
           <div>

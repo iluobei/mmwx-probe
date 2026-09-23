@@ -486,6 +486,16 @@ function TrafficDialog({
   );
 }
 
+// 连接数是纯计数，**不要**套 bytes()/speed() 那类进位格式化（#892 就是 1024 与 1000
+// 两套进位混用出的 bug），只加千分位方便读大数。未上报（老 agent 或非 Linux agent）→ "—"，
+// 不能退化成 0：那会跟"真的一条连接都没有"混掉。
+export function connCount(value?: number): string {
+  return typeof value === "number" ? value.toLocaleString("en-US") : "—";
+}
+
+export const CONN_COUNT_HINT =
+  "TCP 为整机 ESTABLISHED 连接数（不含 LISTEN / TIME_WAIT），UDP 为整机打开的 UDP socket 数。统计的是整台机器，不只是代理用户的连接。";
+
 function systemTitle(server: ProbeServer): string {
   return (
     [server.os, server.kernel, server.arch].filter(Boolean).join(" · ") ||
@@ -1364,6 +1374,14 @@ function ServerCard({
           <small>本次开机网卡</small>
           <span>↓ {bytes(currentBoot.downlink, false)}</span>
           <span>↑ {bytes(currentBoot.uplink, false)}</span>
+        </div>
+      )}
+      {(server.tcp_connections !== undefined ||
+        server.udp_connections !== undefined) && (
+        <div className="conn-counts">
+          <small title={CONN_COUNT_HINT}>系统连接数</small>
+          <span>TCP {connCount(server.tcp_connections)}</span>
+          <span>UDP {connCount(server.udp_connections)}</span>
         </div>
       )}
       {!!server.ping?.length && (

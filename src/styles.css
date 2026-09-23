@@ -879,7 +879,8 @@ button {
   font-size: 10px;
   text-align: left;
 }
-.cumulative-traffic {
+.cumulative-traffic,
+.conn-counts {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
@@ -888,12 +889,14 @@ button {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.cumulative-traffic small {
+.cumulative-traffic small,
+.conn-counts small {
   grid-column: 1 / -1;
   color: var(--muted);
   font-size: 10px;
 }
-.cumulative-traffic span:last-child {
+.cumulative-traffic span:last-child,
+.conn-counts span:last-child {
   text-align: right;
 }
 .table-ping {

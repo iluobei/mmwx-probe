@@ -69,6 +69,11 @@ export interface ProbeServer {
   os?: string;
   kernel?: string;
   arch?: string;
+  // 系统级连接数（**整机**，不是代理用户的连接数）。口径由 agent 定：
+  // TCP 只数 /proc/net/tcp{,6} 的 ESTABLISHED，UDP 数 /proc/net/udp{,6} 的全部 socket。
+  // 老 agent 与非 Linux agent 不上报 → 后端整个字段省略 → 这里缺省 → UI 显示 "—"。
+  tcp_connections?: number;
+  udp_connections?: number;
   ping?: ProbePingSeries[];
   expires_at?: string;
   renewal_price?: number;
