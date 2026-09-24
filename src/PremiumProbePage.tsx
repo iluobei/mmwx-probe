@@ -14,6 +14,8 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { triISPRows } from "./tri-isp";
+import { CONN_COUNT_HINT, connCount, UnlockTabbedList } from "./App";
 import type {
   ForwardChainBucket,
   ForwardChainData,
@@ -22,6 +24,7 @@ import type {
   ProbePingSeries,
   ProbeServer,
   ProbePayload,
+  TriISPPublic,
 } from "./types";
 import { Twemoji } from "./Twemoji";
 import { FLAG_OPTIONS } from "./country-flag";
@@ -1941,9 +1944,11 @@ function ForwardChainView({ wsChains }: { wsChains?: ForwardChainData[] }) {
 function PremiumNetworkView({
   servers,
   forwardChains,
+  triISP,
 }: {
   servers: ProbeServer[];
   forwardChains?: ForwardChainData[];
+  triISP?: TriISPPublic;
 }) {
   const [netMode, setNetMode] = useState<"server" | "forward">("server");
   const [serverIndex, setServerIndex] = useState(0);
@@ -2299,6 +2304,8 @@ function PremiumNetworkView({
               countryFlag(serverRegionKey(row.server)) ||
               row.server.region ||
               "";
+            // 三网行按 key 从本机实测序列里取,匹配不到的槽位照样成行画「—」。
+            const triRows = triISPRows(triISP, row.server.ping || []);
             return (
               <div className="premium-probe-network-row" key={`${row.index}`}>
                 <div className="premium-probe-network-server">
@@ -2318,12 +2325,47 @@ function PremiumNetworkView({
                     </small>
                   </span>
                 </div>
-                <strong data-level={quality}>
-                  {row.latency === undefined ? "—" : `${row.latency} ms`}
-                </strong>
-                <strong data-level={quality}>
-                  {row.loss === undefined ? "—" : `${row.loss.toFixed(1)}%`}
-                </strong>
+                {triRows.length > 0 ? (
+                  <>
+                    {/* 三网模式:两个数值格各堆三行。刻意不改 grid-template-columns ——
+                        那四列宽度是按「服务器 | 延迟 | 丢包 | 图表」调过的,合并格子会让
+                        表头对不上;两侧都是三行等高,列自然仍然对齐。 */}
+                    <div className="premium-probe-network-tri">
+                      {triRows.map((tri) => (
+                        <span key={tri.isp}>
+                          <small>{tri.label}</small>
+                          <strong data-level={quality}>
+                            {!tri.series
+                              ? "—"
+                              : tri.series.current_ms < 0
+                                ? "不可达"
+                                : `${tri.series.current_ms} ms`}
+                          </strong>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="premium-probe-network-tri">
+                      {triRows.map((tri) => (
+                        <span key={tri.isp}>
+                          <strong data-level={quality}>
+                            {!tri.series
+                              ? "—"
+                              : `${tri.series.loss_pct.toFixed(1)}%`}
+                          </strong>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <strong data-level={quality}>
+                      {row.latency === undefined ? "—" : `${row.latency} ms`}
+                    </strong>
+                    <strong data-level={quality}>
+                      {row.loss === undefined ? "—" : `${row.loss.toFixed(1)}%`}
+                    </strong>
+                  </>
+                )}
                 <div className="premium-probe-network-chart">
                   {visibleChartSeries.length && detail?.success ? (
                     <MultiTargetLatencyChart
@@ -2725,6 +2767,19 @@ function ServerDetailDrawer({
             )}
           </div>
         </section>
+        <section className="premium-probe-drawer-section">
+          <h3>解锁检测</h3>
+          {(server.unlocks || []).length === 0 ? (
+            <div className="premium-probe-drawer-unlocks">
+              <p>暂无解锁数据</p>
+            </div>
+          ) : (
+            <UnlockTabbedList
+              unlocks={server.unlocks!}
+              className="premium-probe-drawer-unlocks"
+            />
+          )}
+        </section>
         <section className="premium-probe-drawer-section premium-probe-drawer-info">
           <h3>系统与续费</h3>
           <div>
@@ -2740,6 +2795,13 @@ function ServerDetailDrawer({
             <strong>
               {server.cpu_model || "—"}
               {server.cpu_cores ? ` · ${server.cpu_cores} 核` : ""}
+            </strong>
+          </div>
+          <div>
+            <span title={CONN_COUNT_HINT}>系统连接数</span>
+            <strong>
+              TCP {connCount(server.tcp_connections)} · UDP{" "}
+              {connCount(server.udp_connections)}
             </strong>
           </div>
           <div>
@@ -2966,6 +3028,7 @@ export function PremiumProbePage({
             key="network"
             servers={servers}
             forwardChains={data?.forward}
+            triISP={data?.tri_isp}
           />
         ) : view === "resource" ? (
           <PremiumResourceOverview

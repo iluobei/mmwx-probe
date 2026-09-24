@@ -69,6 +69,11 @@ export interface ProbeServer {
   os?: string;
   kernel?: string;
   arch?: string;
+  // 系统级连接数（**整机**，不是代理用户的连接数）。口径由 agent 定：
+  // TCP 只数 /proc/net/tcp{,6} 的 ESTABLISHED，UDP 数 /proc/net/udp{,6} 的全部 socket。
+  // 老 agent 与非 Linux agent 不上报 → 后端整个字段省略 → 这里缺省 → UI 显示 "—"。
+  tcp_connections?: number;
+  udp_connections?: number;
   ping?: ProbePingSeries[];
   expires_at?: string;
   renewal_price?: number;
@@ -79,6 +84,14 @@ export interface ProbeServer {
   provider_url?: string;
   telecom_paid_peer?: boolean;
   return_routes?: ProbeReturnRoute[];
+  unlocks?: ProbeUnlock[];
+}
+
+export interface ProbeUnlock {
+  service: string;
+  status: string;
+  region?: string;
+  tested_at?: string;
 }
 
 export interface ProbeReturnRoute {
@@ -126,6 +139,17 @@ export interface ForwardChainData {
   traffic?: ForwardChainTraffic | null;
 }
 
+export interface TriISPPublicSlot {
+  isp: string;
+  key: string;
+  label: string;
+}
+
+export interface TriISPPublic {
+  enabled?: boolean;
+  targets?: TriISPPublicSlot[];
+}
+
 export interface ProbePayload {
   enabled: boolean;
   forward?: ForwardChainData[];
@@ -137,6 +161,9 @@ export interface ProbePayload {
   show_traffic_quota?: boolean;
   show_renewal_timeline?: boolean;
   show_health_score?: boolean;
+  /** 三网延迟:哪三个探测点代表电信/联通/移动。主控只下发 isp/key/label ——
+   *  host/port/type 属于探测目标与探测方式,对外页面上从网络面板一眼可见,刻意不带。 */
+  tri_isp?: TriISPPublic;
   title?: string;
   logo?: string;
   icon?: string;

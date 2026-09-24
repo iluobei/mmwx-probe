@@ -879,7 +879,8 @@ button {
   font-size: 10px;
   text-align: left;
 }
-.cumulative-traffic {
+.cumulative-traffic,
+.conn-counts {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
@@ -888,12 +889,14 @@ button {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.cumulative-traffic small {
+.cumulative-traffic small,
+.conn-counts small {
   grid-column: 1 / -1;
   color: var(--muted);
   font-size: 10px;
 }
-.cumulative-traffic span:last-child {
+.cumulative-traffic span:last-child,
+.conn-counts span:last-child {
   text-align: right;
 }
 .table-ping {
@@ -1821,4 +1824,174 @@ footer a:hover {
   .region-globe {
     max-height: 330px;
   }
+}
+
+/* 解锁检测:系统图标左侧的锁图标 + 悬停弹出面板(portal + fixed) */
+.unlock-hover-trigger {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-foreground, #64748b);
+  cursor: pointer;
+}
+.unlock-hover-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+.unlock-hover-trigger[data-unlocked] {
+  color: #059669;
+}
+:root.dark .unlock-hover-trigger[data-unlocked] {
+  color: #34d399;
+}
+.unlock-popover {
+  position: fixed;
+  z-index: 60;
+  width: 288px;
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card, #fff);
+  color: var(--foreground, #0f172a);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  font-size: 12px;
+}
+.unlock-popover-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.unlock-popover-head span:last-child {
+  font-weight: 400;
+  opacity: 0.65;
+}
+.unlock-popover .unlock-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.unlock-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.06);
+}
+:root.dark .unlock-tabs {
+  background: rgba(255, 255, 255, 0.08);
+}
+.unlock-tabs button {
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 2px;
+  background: none;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.unlock-tabs button small {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+.unlock-tabs button[data-active] {
+  opacity: 1;
+  background: var(--card, #fff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+:root.dark .unlock-tabs button[data-active] {
+  background: rgba(255, 255, 255, 0.12);
+}
+.unlock-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.unlock-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+}
+.unlock-row-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unlock-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 45%;
+  flex: none;
+}
+.unlock-row-status > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unlock-row-status[data-tone="ok"] {
+  color: #047857;
+}
+.unlock-row-status[data-tone="partial"] {
+  color: #b45309;
+}
+.unlock-row-status[data-tone="bad"] {
+  color: #64748b;
+}
+.unlock-row-status[data-tone="banned"] {
+  color: #e11d48;
+}
+.unlock-row-status[data-tone="muted"] {
+  color: #94a3b8;
+}
+:root.dark .unlock-row-status[data-tone="ok"] {
+  color: #6ee7b7;
+}
+:root.dark .unlock-row-status[data-tone="partial"] {
+  color: #fcd34d;
+}
+:root.dark .unlock-row-status[data-tone="bad"] {
+  color: #94a3b8;
+}
+:root.dark .unlock-row-status[data-tone="banned"] {
+  color: #fda4af;
+}
+.unlock-empty {
+  margin: 0;
+  padding: 8px 4px;
+  text-align: center;
+  opacity: 0.6;
+}
+.unlock-badge-brand,
+.unlock-badge-lock {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.unlock-badge-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 12px;
+  min-width: 12px;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: rgba(15, 23, 42, 0.1);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+}
+:root.dark .unlock-badge-letter {
+  background: rgba(255, 255, 255, 0.15);
 }

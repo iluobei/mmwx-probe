@@ -1,4 +1,5 @@
 import {
+  Fragment,
   lazy,
   Suspense,
   useEffect,
@@ -16,6 +17,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
+  CircleHelp,
   Clock,
   Cpu,
   Gauge,
@@ -23,6 +25,8 @@ import {
   HardDrive,
   LayoutGrid,
   List,
+  LockKeyhole,
+  LockKeyholeOpen,
   MapPin,
   MemoryStick,
   Monitor,
@@ -60,11 +64,26 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { triISPRows } from "./tri-isp";
+import {
+  UNLOCK_CATEGORIES,
+  groupUnlocks,
+  isUnlocked,
+  unlockServiceMeta,
+  unlockStatusMeta,
+  unlockStatusText,
+  unlockTitle,
+  type UnlockCategory,
+  type UnlockServiceMeta,
+  type UnlockTone,
+} from "./unlock-services";
 import type {
   ProbeBucket,
   ProbePingSeries,
   ProbeReturnRoute,
+  ProbeUnlock,
   ProbeServer,
+  TriISPPublic,
 } from "./types";
 import { useProbe } from "./use-probe";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -182,12 +201,12 @@ function HorizontalChart({
   );
 }
 
-function bytes(value = 0, decimal = true): string {
+function bytes(value = 0, decimal = true, base = 1024): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let n = Math.max(0, value);
   let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
+  while (n >= base && i < units.length - 1) {
+    n /= base;
     i++;
   }
   return `${n.toFixed(decimal && i >= 2 ? 1 : 0)} ${units[i]}`;
@@ -198,8 +217,11 @@ function signedBytes(value: number): string {
   return `${value > 0 ? "+" : "−"}${bytes(Math.abs(value), false)}`;
 }
 
+// 网速按十进制进位(1 MB/s = 1e6 B/s):汇总卡的 Mbps 天生是十进制,
+// 这里若沿用流量的 1024 进位,单机的 "1.53 MB/s × 8 = 12.2 Mbps" 会和
+// 「网络情况 · 实时汇总」的 12.9 Mbps 对不上(#892)。流量仍按 1024 进位。
 function speed(value = 0): string {
-  return `${bytes(value)}/s`;
+  return `${bytes(value, true, 1000)}/s`;
 }
 function bitSpeed(bytesPerSecond = 0): string {
   let value = Math.max(0, bytesPerSecond) * 8;
@@ -463,6 +485,16 @@ function TrafficDialog({
     document.body,
   );
 }
+
+// 连接数是纯计数，**不要**套 bytes()/speed() 那类进位格式化（#892 就是 1024 与 1000
+// 两套进位混用出的 bug），只加千分位方便读大数。未上报（老 agent 或非 Linux agent）→ "—"，
+// 不能退化成 0：那会跟"真的一条连接都没有"混掉。
+export function connCount(value?: number): string {
+  return typeof value === "number" ? value.toLocaleString("en-US") : "—";
+}
+
+export const CONN_COUNT_HINT =
+  "TCP 为整机 ESTABLISHED 连接数（不含 LISTEN / TIME_WAIT），UDP 为整机打开的 UDP socket 数。统计的是整台机器，不只是代理用户的连接。";
 
 function systemTitle(server: ProbeServer): string {
   return (
@@ -836,9 +868,11 @@ function TrendDialog({
 function PingPanel({
   ping,
   serverIndex,
+  triISP,
 }: {
   ping: ProbePingSeries[];
   serverIndex: number;
+  triISP?: TriISPPublic;
 }) {
   const [mode, setMode] = useState<"latency" | "loss" | null>(null);
   const [selected, setSelected] = useState("__avg__");
@@ -865,59 +899,95 @@ function PingPanel({
               : "good";
       return <i key={index} className={level} />;
     });
+  // 三网行按 key 从本机实测序列里取 —— 与主控同一套 triISPRows,
+  // 两处画的是同一份数据,匹配规则不一致会让同一台机器在内外探针上显示不同。
+  const triRows = triISPRows(triISP, ping);
+
   return (
     <>
-      <div className="ping-grid">
-        <div className="ping-head">
-          <span>
-            <Clock size={14} />
-            <select
-              value={selected}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              <option value="__avg__">平均</option>
-              {ping.map((item) => (
-                <option
-                  key={item.key || item.label}
-                  value={item.key || item.label}
+      {triRows.length > 0 ? (
+        <div className="ping-grid">
+          {/* 三网模式:延迟与丢包按电信/联通/移动分三行,沿用同一套两列网格 ——
+              两侧表头落在同一 grid 行里才会等高。匹配不到的槽位照样成行画「—」:
+              直接跳过会让三行变两行,而「移动没数据」本身就是要给人看的信息。 */}
+          {triRows.map((row) => (
+            <Fragment key={row.isp}>
+              <div className="ping-head">
+                <span>{row.label}</span>
+                <strong>
+                  {!row.series
+                    ? "—"
+                    : row.series.current_ms < 0
+                      ? "超时"
+                      : `${row.series.current_ms.toFixed(0)} ms`}
+                </strong>
+              </div>
+              <div className="ping-head">
+                <span>丢包率</span>
+                <strong
+                  className={
+                    row.series && row.series.loss_pct > 0 ? "warning" : ""
+                  }
                 >
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </span>
-          <strong>
-            {current.current_ms < 0
-              ? "超时"
-              : `${current.current_ms.toFixed(0)} ms`}
-          </strong>
+                  {!row.series ? "—" : `${row.series.loss_pct.toFixed(1)}%`}
+                </strong>
+              </div>
+            </Fragment>
+          ))}
         </div>
-        <div className="ping-head">
-          <span>
-            <Wifi size={14} />
-            丢包率
-          </span>
-          <strong className={current.loss_pct > 0 ? "warning" : ""}>
-            {current.loss_pct.toFixed(1)}%
-          </strong>
+      ) : (
+        <div className="ping-grid">
+          <div className="ping-head">
+            <span>
+              <Clock size={14} />
+              <select
+                value={selected}
+                onChange={(event) => setSelected(event.target.value)}
+              >
+                <option value="__avg__">平均</option>
+                {ping.map((item) => (
+                  <option
+                    key={item.key || item.label}
+                    value={item.key || item.label}
+                  >
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <strong>
+              {current.current_ms < 0
+                ? "超时"
+                : `${current.current_ms.toFixed(0)} ms`}
+            </strong>
+          </div>
+          <div className="ping-head">
+            <span>
+              <Wifi size={14} />
+              丢包率
+            </span>
+            <strong className={current.loss_pct > 0 ? "warning" : ""}>
+              {current.loss_pct.toFixed(1)}%
+            </strong>
+          </div>
+          <button
+            className="ping-blocks"
+            type="button"
+            aria-label="查看延迟趋势"
+            onClick={() => setMode("latency")}
+          >
+            {blocks("latency")}
+          </button>
+          <button
+            className="ping-blocks"
+            type="button"
+            aria-label="查看丢包率趋势"
+            onClick={() => setMode("loss")}
+          >
+            {blocks("loss")}
+          </button>
         </div>
-        <button
-          className="ping-blocks"
-          type="button"
-          aria-label="查看延迟趋势"
-          onClick={() => setMode("latency")}
-        >
-          {blocks("latency")}
-        </button>
-        <button
-          className="ping-blocks"
-          type="button"
-          aria-label="查看丢包率趋势"
-          onClick={() => setMode("loss")}
-        >
-          {blocks("loss")}
-        </button>
-      </div>
+      )}
       {mode && (
         <TrendDialog
           serverIndex={serverIndex}
@@ -1009,7 +1079,183 @@ function ReturnRouteBadges({
   );
 }
 
-function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
+export function UnlockServiceIcon({ meta }: { meta: UnlockServiceMeta }) {
+  if (meta.icon) {
+    return (
+      <svg
+        aria-hidden="true"
+        className="unlock-badge-brand"
+        role="img"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path d={meta.icon.path} />
+      </svg>
+    );
+  }
+  return (
+    <span aria-hidden="true" className="unlock-badge-letter">
+      {meta.short}
+    </span>
+  );
+}
+
+export function UnlockStateIcon({ tone }: { tone: UnlockTone }) {
+  if (tone === "ok" || tone === "partial") {
+    return <LockKeyholeOpen aria-hidden="true" className="unlock-badge-lock" />;
+  }
+  if (tone === "muted") {
+    return <CircleHelp aria-hidden="true" className="unlock-badge-lock" />;
+  }
+  return <LockKeyhole aria-hidden="true" className="unlock-badge-lock" />;
+}
+
+export function UnlockTabbedList({
+  unlocks,
+  className,
+}: {
+  unlocks: ProbeUnlock[];
+  className?: string;
+}) {
+  const [tab, setTab] = useState<UnlockCategory>("streaming");
+  const groups = groupUnlocks(unlocks);
+  const rows = groups[tab];
+  return (
+    <div className={className ? `unlock-list ${className}` : "unlock-list"}>
+      <div className="unlock-tabs">
+        {UNLOCK_CATEGORIES.map((c) => {
+          const list = groups[c.key];
+          const ok = list.filter((u) => isUnlocked(u.status)).length;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              data-active={tab === c.key || undefined}
+              onClick={() => setTab(c.key)}
+            >
+              {c.zh}
+              <small>
+                {ok}/{list.length}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      {rows.length === 0 ? (
+        <p className="unlock-empty">—</p>
+      ) : (
+        <ul>
+          {rows.map((u) => {
+            const meta = unlockServiceMeta(u.service);
+            const st = unlockStatusMeta(u.status);
+            return (
+              <li key={u.service} title={unlockTitle(u, true)}>
+                <UnlockServiceIcon meta={meta} />
+                <span className="unlock-row-label">{meta.label}</span>
+                <span
+                  className="unlock-row-status"
+                  data-tone={meta.info ? "info" : st.tone}
+                >
+                  <span>{unlockStatusText(u, true)}</span>
+                  {!meta.info && <UnlockStateIcon tone={st.tone} />}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function UnlockHoverIcon({ unlocks }: { unlocks: ProbeUnlock[] }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number }>();
+  const anchor = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const unlocked = unlocks.filter((u) => isUnlocked(u.status)).length;
+
+  const show = () => {
+    window.clearTimeout(closeTimer.current);
+    const r = anchor.current?.getBoundingClientRect();
+    if (r) {
+      setPos({
+        top: r.bottom + 6,
+        right: Math.max(8, window.innerWidth - r.right),
+      });
+    }
+    setOpen(true);
+  };
+  const hide = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
+  };
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  const label = `解锁 ${unlocked}/${unlocks.length}`;
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className="unlock-hover-trigger"
+        data-unlocked={unlocked > 0 || undefined}
+        aria-label={label}
+        aria-expanded={open}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onClick={() => (open ? setOpen(false) : show())}
+      >
+        {unlocked > 0 ? (
+          <LockKeyholeOpen aria-hidden="true" />
+        ) : (
+          <LockKeyhole aria-hidden="true" />
+        )}
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-label={label}
+            className="unlock-popover"
+            style={{ top: pos.top, right: pos.right }}
+            onMouseEnter={() => window.clearTimeout(closeTimer.current)}
+            onMouseLeave={hide}
+          >
+            <div className="unlock-popover-head">
+              <span>解锁检测</span>
+              <span>
+                {unlocked}/{unlocks.length}
+              </span>
+            </div>
+            <UnlockTabbedList unlocks={unlocks} />
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function ServerCard({
+  server,
+  index,
+  triISP,
+}: {
+  server: ProbeServer;
+  index: number;
+  triISP?: TriISPPublic;
+}) {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const name = server.name || `服务器 ${index + 1}`;
   const flag = regionFlag(server.region_country || server.region);
@@ -1025,6 +1271,9 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
             {displayServerName(name, `服务器 ${index + 1}`, flag)}
           </Twemoji>
         </h2>
+        {!!server.unlocks?.length && (
+          <UnlockHoverIcon unlocks={server.unlocks} />
+        )}
         <span title={systemTitle(server)}>
           <SystemIcon server={server} />
         </span>
@@ -1127,8 +1376,16 @@ function ServerCard({ server, index }: { server: ProbeServer; index: number }) {
           <span>↑ {bytes(currentBoot.uplink, false)}</span>
         </div>
       )}
+      {(server.tcp_connections !== undefined ||
+        server.udp_connections !== undefined) && (
+        <div className="conn-counts">
+          <small title={CONN_COUNT_HINT}>系统连接数</small>
+          <span>TCP {connCount(server.tcp_connections)}</span>
+          <span>UDP {connCount(server.udp_connections)}</span>
+        </div>
+      )}
       {!!server.ping?.length && (
-        <PingPanel ping={server.ping} serverIndex={index} />
+        <PingPanel ping={server.ping} serverIndex={index} triISP={triISP} />
       )}
       {!!server.return_routes?.length && (
         <ReturnRouteBadges
@@ -1473,6 +1730,9 @@ function ServerTable({ servers }: { servers: ProbeServer[] }) {
                             regionFlag(server.region_country || server.region),
                           )}
                         </Twemoji>
+                      )}
+                      {!!server.unlocks?.length && (
+                        <UnlockHoverIcon unlocks={server.unlocks} />
                       )}
                       <span title={systemTitle(server)}>
                         <SystemIcon server={server} />
@@ -1940,6 +2200,7 @@ export function App() {
                 key={server.name}
                 server={server}
                 index={servers.indexOf(server)}
+                triISP={data?.tri_isp}
               />
             ))
           ) : (
