@@ -1144,6 +1144,16 @@
   stroke-width: 1;
 }
 
+/* 转到地球背面的地区:标签留在原地(不然一拖就少一半),但压暗,
+   跟正面的区分开 —— 地平线那头的东西不该和眼前的一样亮。 */
+.premium-probe-orbit-labels .is-behind {
+  opacity: 0.42;
+}
+
+.premium-probe-orbit-labels .is-behind circle {
+  filter: none;
+}
+
 .premium-probe-orbit-label-content {
   display: flex;
   width: 100%;

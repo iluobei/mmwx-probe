@@ -882,8 +882,13 @@ function PingPanel({
     selected === "__avg__"
       ? average
       : ping.find((item) => (item.key || item.label) === selected) || average;
-  const blocks = (kind: "latency" | "loss") =>
-    current.buckets.map((bucket, index) => {
+  // 按传入的 buckets 渲染色块条 —— 三网模式下每行画自己那条,
+  // 原来闭包在 current 上只能画"当前选中的那一条"。
+  const blocksOf = (
+    buckets: ProbePingSeries["buckets"],
+    kind: "latency" | "loss",
+  ) =>
+    buckets.map((bucket, index) => {
       const value = kind === "loss" ? bucket.loss : bucket.ms;
       const level =
         value < 0
@@ -932,6 +937,36 @@ function PingPanel({
                   {!row.series ? "—" : `${row.series.loss_pct.toFixed(1)}%`}
                 </strong>
               </div>
+              {/* 色块条:内置探针的三网每行是「延迟 + 丢包 + 两条色块条」四格,
+                  这里原来只画了前两格 —— 同一台机器在内外探针上长得不一样,
+                  而且丢了"最近一小时每个桶什么状况"这层信息(用户实报)。
+                  没探到的槽位画空条且不可点,与上面那两格的「—」一致。 */}
+              <button
+                className="ping-blocks"
+                type="button"
+                aria-label={`${row.label} 延迟趋势`}
+                disabled={!row.series}
+                onClick={() => {
+                  if (!row.series) return;
+                  setSelected(row.series.key || row.series.label);
+                  setMode("latency");
+                }}
+              >
+                {blocksOf(row.series?.buckets ?? [], "latency")}
+              </button>
+              <button
+                className="ping-blocks"
+                type="button"
+                aria-label={`${row.label} 丢包率趋势`}
+                disabled={!row.series}
+                onClick={() => {
+                  if (!row.series) return;
+                  setSelected(row.series.key || row.series.label);
+                  setMode("loss");
+                }}
+              >
+                {blocksOf(row.series?.buckets ?? [], "loss")}
+              </button>
             </Fragment>
           ))}
         </div>
@@ -976,7 +1011,7 @@ function PingPanel({
             aria-label="查看延迟趋势"
             onClick={() => setMode("latency")}
           >
-            {blocks("latency")}
+            {blocksOf(current.buckets, "latency")}
           </button>
           <button
             className="ping-blocks"
@@ -984,7 +1019,7 @@ function PingPanel({
             aria-label="查看丢包率趋势"
             onClick={() => setMode("loss")}
           >
-            {blocks("loss")}
+            {blocksOf(current.buckets, "loss")}
           </button>
         </div>
       )}

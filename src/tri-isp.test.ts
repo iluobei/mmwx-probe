@@ -53,3 +53,38 @@ equal(
 );
 
 console.log("tri-isp: all assertions passed");
+
+// 一个三网代表点都没探到时,取延迟列表前三个顶上 —— 按主控标的 tri_fallback(配置顺序)。
+const zjTri: TriISPPublic = {
+  enabled: true,
+  targets: [
+    { isp: "telecom", key: "zj-dx", label: "浙江电信" },
+    { isp: "unicom", key: "zj-lt", label: "浙江联通" },
+    { isp: "mobile", key: "zj-yd", label: "浙江移动" },
+  ],
+};
+const fallbackRows = triISPRows<ProbePingSeries>(zjTri, [
+  { key: "a", label: "北京电信", current_ms: 1, loss_pct: 0, buckets: [], tri_fallback: 2 },
+  { key: "b", label: "上海联通", current_ms: 2, loss_pct: 0, buckets: [] },
+  { key: "c", label: "广州移动", current_ms: 3, loss_pct: 0, buckets: [], tri_fallback: 1 },
+  { key: "d", label: "成都电信", current_ms: 4, loss_pct: 0, buckets: [], tri_fallback: 3 },
+]);
+equal(
+  fallbackRows.map((r) => r.label),
+  ["广州移动", "北京电信", "成都电信"],
+  "兜底按主控标的配置顺序取前三个",
+);
+equal(
+  new Set(fallbackRows.map((r) => r.isp)).size,
+  3,
+  "isp 充当 React key,兜底行也必须唯一",
+);
+equal(
+  triISPRows<ProbePingSeries>(zjTri, [
+    { label: "平均", current_ms: 5, loss_pct: 0, buckets: [] },
+    { key: "a", label: "A", current_ms: 1, loss_pct: 0, buckets: [] },
+    { key: "b", label: "B", current_ms: 2, loss_pct: 0, buckets: [] },
+  ]).map((r) => r.label),
+  ["A", "B"],
+  "旧主控没标时按下发顺序取,平均态不参与",
+);

@@ -16,21 +16,36 @@ export type TriISPRow<S> = {
  * 匹配不到的槽位仍然保留(series 为空),由调用方画成「无数据」——
  * 直接跳过会让三行变两行,而「移动没数据」本身就是要给人看的信息。
  *
+ * 例外:这台机器一个代表点都没探到(agent 旧、或给它单独配了别的延迟目标),三行全是「—」
+ * 等于这块什么都没说。这时取它延迟列表的前三个顶上 —— 顺序以主控标的 tri_fallback
+ * (配置顺序)为准,旧主控没标就按下发顺序。兜底行的 isp 用序列 key 充当唯一标识
+ * (渲染方只拿它做 React key,三个兜底点可能同属一个运营商)。
+ *
  * 与主控 miaomiaowuX 的 src/lib/tri-isp-targets.ts 保持同一套语义:
  * 两处画的是同一份数据,匹配规则不一致会让同一台机器在内外探针上显示不同。
  */
-export function triISPRows<S extends { key?: string }>(
-  tri: TriISPPublic | undefined,
-  series: S[],
-): TriISPRow<S>[] {
+export function triISPRows<
+  S extends { key?: string; label?: string; tri_fallback?: number },
+>(tri: TriISPPublic | undefined, series: S[]): TriISPRow<S>[] {
   if (!tri?.enabled || !tri.targets?.length) return [];
   const byKey = new Map<string, S>();
   for (const s of series) {
     if (s.key) byKey.set(s.key, s);
   }
-  return tri.targets.map((t) => ({
+  const rows = tri.targets.map((t) => ({
     isp: t.isp,
     label: t.label,
     series: byKey.get(t.key),
+  }));
+  // 没有 key 的条目(平均态)不能顶上来 —— 那等于把平均值标成某个运营商。
+  const keyed = series.filter((s) => s.key);
+  if (keyed.length === 0 || rows.some((row) => row.series)) return rows;
+  const marked = keyed
+    .filter((s) => (s.tri_fallback ?? 0) > 0)
+    .sort((a, b) => (a.tri_fallback ?? 0) - (b.tri_fallback ?? 0));
+  return (marked.length > 0 ? marked : keyed).slice(0, 3).map((s, i) => ({
+    isp: s.key || `fallback-${i}`,
+    label: s.label || s.key || "",
+    series: s,
   }));
 }

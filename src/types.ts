@@ -18,6 +18,8 @@ export interface ProbePingSeries {
   current_ms: number;
   loss_pct: number;
   buckets: ProbeBucket[];
+  /** 三网兜底序号 1..3:一个三网代表点都没探到时由主控按延迟列表配置顺序标出。 */
+  tri_fallback?: number;
 }
 
 export interface ProbeServer {
