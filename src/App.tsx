@@ -1,8 +1,11 @@
 import {
+  createContext,
   Fragment,
   lazy,
   Suspense,
+  useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -19,6 +22,8 @@ import {
   ChevronDown,
   CircleHelp,
   Clock,
+  CloudDownload,
+  CloudUpload,
   Cpu,
   Gauge,
   Globe2,
@@ -30,6 +35,7 @@ import {
   MapPin,
   MemoryStick,
   Monitor,
+  Network,
   PieChart,
   Server,
   Wallet,
@@ -86,6 +92,14 @@ import type {
   TriISPPublic,
 } from "./types";
 import { useProbe } from "./use-probe";
+import { ConnLegendDot, ConnSparkline } from "./ConnSparkline";
+import { connHistoryFromSeries, type ProbeMetricPoint } from "./conn-sparkline";
+import {
+  effectiveProbeRange,
+  probeRangeBucketCount,
+  probeRangeBucketSec,
+  probeRangeOptions,
+} from "./probe-ranges";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { PasskeyLogin } from "./PasskeyLogin";
 import { Twemoji } from "./Twemoji";
@@ -124,26 +138,15 @@ const PremiumProbePage = lazy(() =>
     default: module.PremiumProbePage,
   })),
 );
-const ranges = [
-  {
-    key: "1h",
-    label: "1 小时",
-    bucketLabel: (index: number, count: number) => `-${(count - index) * 5}m`,
-  },
-  {
-    key: "6h",
-    label: "6 小时",
-    bucketLabel: (index: number, count: number) =>
-      `-${(((count - index) * 10) / 60).toFixed(1)}h`,
-  },
-  {
-    key: "24h",
-    label: "24 小时",
-    bucketLabel: (index: number, count: number) =>
-      `-${(((count - index) * 30) / 60).toFixed(0)}h`,
-  },
-] as const;
-type RangeKey = (typeof ranges)[number]["key"];
+// 曲线弹窗可选的时间范围随主控的保留天数（history_days）变，由 App 注入。
+const HistoryDaysContext = createContext(1);
+
+// useProbeRange 弹窗的时间范围；保留期调短后选中的范围可能已不存在，回落 1h。
+function useProbeRange() {
+  const options = probeRangeOptions(useContext(HistoryDaysContext));
+  const [picked, setRange] = useState("1h");
+  return [effectiveProbeRange(picked, options), setRange, options] as const;
+}
 
 function formatAxisDateTime(unixSeconds: number): string {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -164,6 +167,11 @@ function HorizontalChart({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; left: number } | null>(null);
+  // 最新的数据在最右边:图比容器宽时默认滚到最右。多天范围的图有几千像素宽,
+  // 停在最左边只看得到最早、多半还没有数据的那一段,看着像整张图是空的。
+  useLayoutEffect(() => {
+    if (ref.current) ref.current.scrollLeft = ref.current.scrollWidth;
+  }, [width]);
   return (
     <div className="chart-scroll-frame">
       <div className="chart-fixed-y-axis" aria-hidden="true">
@@ -252,6 +260,9 @@ const cycleLabel = {
   quarter: "季",
   half_year: "半年",
   year: "年",
+  two_year: "两年",
+  three_year: "三年",
+  permanent: "永久",
 } as const;
 function expiring(server: ProbeServer): boolean {
   if (!server.expires_at) return false;
@@ -358,7 +369,7 @@ function Meter({
       <div className="metric-head">
         <span>
           {icon}
-          {label}
+          <span className="metric-label">{label}</span>
         </span>
         <strong>{value}</strong>
       </div>
@@ -620,7 +631,7 @@ function TrendDialog({
   mode: "latency" | "loss";
   close: () => void;
 }) {
-  const [range, setRange] = useState<RangeKey>("1h");
+  const [range, setRange, rangeOptions] = useProbeRange();
   const [series, setSeries] = useState<ProbePingSeries[]>(initial);
   const [lineScope, setLineScope] = useState<ProbeLineScope>("all");
   const [selectedLineKey, setSelectedLineKey] = useState(targetKey);
@@ -657,9 +668,7 @@ function TrendDialog({
           ]);
           setTimeMeta({
             generatedAt: payload.generated_at ?? Math.floor(Date.now() / 1000),
-            bucketSec:
-              payload.bucket_sec ??
-              (range === "1h" ? 300 : range === "6h" ? 600 : 1800),
+            bucketSec: payload.bucket_sec ?? probeRangeBucketSec(range),
           });
         }
       })
@@ -726,7 +735,7 @@ function TrendDialog({
           </button>
         </header>
         <div className="ranges">
-          {ranges.map((item) => (
+          {rangeOptions.map((item) => (
             <button
               type="button"
               className={range === item.key ? "active" : ""}
@@ -859,6 +868,171 @@ function TrendDialog({
             })}
           </div>
         )}
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+type ConnSeriesPayload = {
+  series?: {
+    tcp_connections?: ProbeMetricPoint[];
+    udp_connections?: ProbeMetricPoint[];
+  };
+  bucket_sec?: number;
+  buckets?: number;
+  generated_at?: number;
+};
+
+// ConnDialog 系统连接数历史（TCP / UDP 两条线），时间范围同延迟弹窗、随保留天数变。
+// 1 小时先用卡片上已有的 conn_history 顶着，其余范围向 /api/series?metric=system 取。
+function ConnDialog({
+  serverIndex,
+  title,
+  fallback,
+  close,
+}: {
+  serverIndex: number;
+  title: string;
+  fallback?: ProbeServer["conn_history"];
+  close: () => void;
+}) {
+  const [range, setRange, rangeOptions] = useProbeRange();
+  const [loading, setLoading] = useState(false);
+  const [payload, setPayload] = useState<
+    (ConnSeriesPayload & { range: string }) | null
+  >(null);
+  const [openedAt] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    void fetch(`/api/series?server=${serverIndex}&metric=system&range=${range}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<
+          ConnSeriesPayload & { success: boolean }
+        >;
+      })
+      .then((body) => setPayload(body.success ? { ...body, range } : null))
+      .catch(() => {
+        if (!controller.signal.aborted) setPayload(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [range, serverIndex]);
+
+  const current = payload?.range === range ? payload : null;
+  const history = connHistoryFromSeries(
+    current?.series?.tcp_connections,
+    current?.series?.udp_connections,
+    current?.generated_at ?? openedAt,
+    current?.bucket_sec ?? probeRangeBucketSec(range),
+    current?.buckets ?? probeRangeBucketCount(range),
+  );
+  const useFallback = !current && range === "1h" && !!fallback;
+  const rows = history.times.map((t, i) => ({
+    time: formatAxisDateTime(t),
+    tcp: useFallback ? (fallback!.tcp[i] ?? null) : history.tcp[i],
+    udp: useFallback ? (fallback!.udp[i] ?? null) : history.udp[i],
+  }));
+
+  return createPortal(
+    <div className="modal-backdrop" role="presentation" onMouseDown={close}>
+      <section
+        className="modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h2>{title} · 系统连接数趋势</h2>
+          <button aria-label="关闭" onClick={close}>
+            ×
+          </button>
+        </header>
+        <div className="ranges">
+          {rangeOptions.map((item) => (
+            <button
+              type="button"
+              className={range === item.key ? "active" : ""}
+              onClick={() => setRange(item.key)}
+              key={item.key}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="chart">
+          {loading && !useFallback && (
+            <div className="loading-overlay">加载中…</div>
+          )}
+          <HorizontalChart width={Math.max(760, rows.length * 82)}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={rows}
+                margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+              >
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  minTickGap={28}
+                />
+                <YAxis
+                  width={52}
+                  tick={{ fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                  formatter={(value, name) => [
+                    Number(value).toLocaleString("en-US"),
+                    String(name),
+                  ]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="tcp"
+                  name="TCP"
+                  stroke="var(--conn-tcp, #3b82f6)"
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="udp"
+                  name="UDP"
+                  stroke="var(--conn-udp, #8b5cf6)"
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </HorizontalChart>
+        </div>
+        <div className="legend">
+          <span>
+            <i style={{ background: "var(--conn-tcp, #3b82f6)" }} />
+            TCP
+          </span>
+          <span>
+            <i style={{ background: "var(--conn-udp, #8b5cf6)" }} />
+            UDP
+          </span>
+          <span title={CONN_COUNT_HINT}>整机连接数，每个时间桶取均值</span>
+        </div>
       </section>
     </div>,
     document.body,
@@ -1292,6 +1466,7 @@ function ServerCard({
   triISP?: TriISPPublic;
 }) {
   const [trafficOpen, setTrafficOpen] = useState(false);
+  const [connOpen, setConnOpen] = useState(false);
   const name = server.name || `服务器 ${index + 1}`;
   const flag = regionFlag(server.region_country || server.region);
   const trafficUsed = billableTraffic(server);
@@ -1347,7 +1522,9 @@ function ServerCard({
             <div className="metric-head">
               <span>
                 <PieChart size={14} />
-                {trafficUsageLabel(server)}
+                <span className="metric-label">
+                  {trafficUsageLabel(server)}
+                </span>
               </span>
               <strong>
                 {server.traffic_limit
@@ -1407,16 +1584,56 @@ function ServerCard({
         currentBoot.downlink !== undefined) && (
         <div className="cumulative-traffic">
           <small>本次开机网卡</small>
-          <span>↓ {bytes(currentBoot.downlink, false)}</span>
-          <span>↑ {bytes(currentBoot.uplink, false)}</span>
+          <span>
+            <CloudDownload size={16} />
+            {bytes(currentBoot.downlink, false)}
+          </span>
+          <span>
+            <CloudUpload size={16} />
+            {bytes(currentBoot.uplink, false)}
+          </span>
         </div>
       )}
       {(server.tcp_connections !== undefined ||
         server.udp_connections !== undefined) && (
         <div className="conn-counts">
-          <small title={CONN_COUNT_HINT}>系统连接数</small>
-          <span>TCP {connCount(server.tcp_connections)}</span>
-          <span>UDP {connCount(server.udp_connections)}</span>
+          <small title={CONN_COUNT_HINT}>
+            <Network size={14} />
+            系统连接数
+            {server.conn_history && <em>近 1 小时</em>}
+          </small>
+          <span>
+            <b>
+              {server.conn_history && <ConnLegendDot kind="tcp" />}
+              TCP
+            </b>
+            {connCount(server.tcp_connections)}
+          </span>
+          <span>
+            <b>
+              {server.conn_history && <ConnLegendDot kind="udp" />}
+              UDP
+            </b>
+            {connCount(server.udp_connections)}
+          </span>
+          {server.conn_history && (
+            <button
+              type="button"
+              className="conn-sparkline-button"
+              onClick={() => setConnOpen(true)}
+              aria-label="查看连接数历史"
+            >
+              <ConnSparkline history={server.conn_history} />
+            </button>
+          )}
+          {connOpen && (
+            <ConnDialog
+              serverIndex={index}
+              title={name}
+              fallback={server.conn_history}
+              close={() => setConnOpen(false)}
+            />
+          )}
         </div>
       )}
       {!!server.ping?.length && (
@@ -1428,8 +1645,17 @@ function ServerCard({
           telecomPaidPeer={server.telecom_paid_peer}
         />
       )}
-      {(server.expires_at || server.renewal_price !== undefined) && (
+      {(server.expires_at ||
+        server.renewal_price !== undefined ||
+        server.renewal_cycle === "permanent") && (
         <div className="server-meta">
+          {/* 永久(一次性买断)没有到期日:显示「永久」,不显示倒计时 */}
+          {server.renewal_cycle === "permanent" && !server.expires_at && (
+            <span>
+              <CalendarClock size={13} />
+              永久
+            </span>
+          )}
           {server.expires_at &&
             (server.provider_url ? (
               <a
@@ -1688,10 +1914,16 @@ function TableBootTraffic({ server }: { server: ProbeServer }) {
 }
 
 function TableRenewal({ server }: { server: ProbeServer }) {
-  if (!server.expires_at && server.renewal_price === undefined)
+  const permanent = server.renewal_cycle === "permanent";
+  if (!server.expires_at && server.renewal_price === undefined && !permanent)
     return <span className="dash">—</span>;
   return (
     <div className="table-renewal">
+      {permanent && !server.expires_at && (
+        <span>
+          <CalendarClock size={13} /> 永久
+        </span>
+      )}
       {server.expires_at &&
         (server.provider_url ? (
           <a
@@ -2044,6 +2276,7 @@ export function App() {
     0,
   );
   return (
+    <HistoryDaysContext.Provider value={data.history_days ?? 1}>
     <div
       className={
         data.license_badge ? "app-shell has-license-footer" : "app-shell"
@@ -2269,5 +2502,6 @@ export function App() {
         </div>
       )}
     </div>
+    </HistoryDaysContext.Provider>
   );
 }

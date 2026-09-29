@@ -3056,6 +3056,40 @@
   margin-bottom: 0.45rem;
 }
 
+/* 系统连接数折线图：TCP 用主题金、UDP 用冷蓝，两条线在黑底上都分得清 */
+.premium-probe-drawer-conns {
+  --conn-tcp: #dfc47e;
+  --conn-udp: #7aa7e8;
+}
+
+.premium-probe-drawer-conn-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+  margin-bottom: 0.45rem;
+  color: #b9ae98;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.premium-probe-drawer-conn-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.premium-probe-drawer-conn-legend small {
+  margin-left: auto;
+  color: #827a6c;
+  font-size: inherit;
+}
+
+.premium-probe-drawer-conn-chart {
+  height: 3.5rem;
+  color: #dcd1bb;
+}
+
 .premium-probe-drawer-traffic > div {
   display: grid;
   min-height: 28px;
@@ -3513,6 +3547,19 @@
 :root.light .premium-probe-drawer-section-heading button:hover,
 :root.light .premium-probe-drawer-section-heading button.is-active {
   color: #8a6210;
+}
+
+:root.light .premium-probe-drawer-conns {
+  --conn-tcp: #a87c22;
+  --conn-udp: #3f6fb5;
+}
+
+:root.light .premium-probe-drawer-conn-legend {
+  color: #6f6552;
+}
+
+:root.light .premium-probe-drawer-conn-chart {
+  color: #5c5343;
 }
 
 :root.light .premium-probe-map aside {

@@ -22,6 +22,11 @@ export interface ProbePingSeries {
   tri_fallback?: number;
 }
 
+export interface ProbeConnHistory {
+  tcp: (number | null)[];
+  udp: (number | null)[];
+}
+
 export interface ProbeServer {
   name?: string;
   region?: string;
@@ -76,11 +81,21 @@ export interface ProbeServer {
   // 老 agent 与非 Linux agent 不上报 → 后端整个字段省略 → 这里缺省 → UI 显示 "—"。
   tcp_connections?: number;
   udp_connections?: number;
+  // 近 1 小时连接数（12 格 × 5 分钟，从旧到新，没样本的格为 null），
+  // 主控的探针配置里开了「连接数折线图」才下发。
+  conn_history?: ProbeConnHistory;
   ping?: ProbePingSeries[];
   expires_at?: string;
   renewal_price?: number;
   renewal_price_cny?: number;
-  renewal_cycle?: "month" | "quarter" | "half_year" | "year";
+  renewal_cycle?:
+    | "month"
+    | "quarter"
+    | "half_year"
+    | "year"
+    | "two_year"
+    | "three_year"
+    | "permanent";
   renewal_currency?: string;
   provider_name?: string;
   provider_url?: string;
@@ -163,6 +178,8 @@ export interface ProbePayload {
   show_traffic_quota?: boolean;
   show_renewal_timeline?: boolean;
   show_health_score?: boolean;
+  // 曲线最长可看的天数（= 主控「延迟采样点(天)」，1–7）；老主控不下发 → 只有 24 小时以内。
+  history_days?: number;
   /** 三网延迟:哪三个探测点代表电信/联通/移动。主控只下发 isp/key/label ——
    *  host/port/type 属于探测目标与探测方式,对外页面上从网络面板一眼可见,刻意不带。 */
   tri_isp?: TriISPPublic;

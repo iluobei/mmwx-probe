@@ -16,6 +16,14 @@ import {
 } from "lucide-react";
 import { triISPRows } from "./tri-isp";
 import { CONN_COUNT_HINT, connCount, UnlockTabbedList } from "./App";
+import { ConnLegendDot, ConnSparkline } from "./ConnSparkline";
+import { connHistoryFromSeries, type ProbeMetricPoint } from "./conn-sparkline";
+import {
+  effectiveProbeRange,
+  probeRangeBucketCount,
+  probeRangeBucketSec,
+  probeRangeOptions,
+} from "./probe-ranges";
 import type {
   ForwardChainBucket,
   ForwardChainData,
@@ -530,7 +538,9 @@ function renewalTimelineRows(servers: ProbeServer[]) {
   now.setHours(0, 0, 0, 0);
   return servers
     .map((server, index) => {
-      if (!server.expires_at) return undefined;
+      // 永久(一次性买断)没有到期日,不进续费时间轴
+      if (!server.expires_at || server.renewal_cycle === "permanent")
+        return undefined;
       const expiresAt = new Date(`${server.expires_at}T00:00:00`);
       const days = Math.ceil((expiresAt.getTime() - now.getTime()) / 86400000);
       const price =
@@ -541,6 +551,8 @@ function renewalTimelineRows(servers: ProbeServer[]) {
         quarter: 3,
         half_year: 6,
         year: 12,
+        two_year: 24,
+        three_year: 36,
       }[server.renewal_cycle || "month"];
       return {
         index,
@@ -699,12 +711,17 @@ function BillingOverview({ servers }: { servers: ProbeServer[] }) {
     quarter: 3,
     half_year: 6,
     year: 12,
+    two_year: 24,
+    three_year: 36,
   } as const;
   const cycleLabels = {
     month: "月付",
     quarter: "季付",
     half_year: "半年付",
     year: "年付",
+    two_year: "两年付",
+    three_year: "三年付",
+    permanent: "永久",
   } as const;
   const rows = servers
     .map((server, index) => {
@@ -717,7 +734,8 @@ function BillingOverview({ servers }: { servers: ProbeServer[] }) {
         index,
         name: server.name || `#${index + 1}`,
         cycle: cycleLabels[cycle],
-        monthly: price / cycleMonths[cycle],
+        // 永久(一次性买断)没有续费成本:月均按 0 计,不摊进月度/年化预算
+        monthly: cycle === "permanent" ? 0 : price / cycleMonths[cycle],
       };
     })
     .filter((item): item is NonNullable<typeof item> => !!item)
@@ -1945,16 +1963,20 @@ function PremiumNetworkView({
   servers,
   forwardChains,
   triISP,
+  historyDays,
 }: {
   servers: ProbeServer[];
   forwardChains?: ForwardChainData[];
   triISP?: TriISPPublic;
+  historyDays?: number;
 }) {
   const [netMode, setNetMode] = useState<"server" | "forward">("server");
   const [serverIndex, setServerIndex] = useState(0);
   const [target, setTarget] = useState("__all__");
   const [visibleTargets, setVisibleTargets] = useState<string[]>([]);
-  const [range, setRange] = useState<"1h" | "6h" | "24h">("1h");
+  const rangeOptions = probeRangeOptions(historyDays);
+  const [pickedRange, setRange] = useState("1h");
+  const range = effectiveProbeRange(pickedRange, rangeOptions);
   const selectedServerIndex = Math.min(
     serverIndex,
     Math.max(0, servers.length - 1),
@@ -2179,10 +2201,11 @@ function PremiumNetworkView({
           },
           {
             label: "时间范围",
-            value:
-              range === "1h" ? "1 小时" : range === "6h" ? "6 小时" : "24 小时",
+            value: rangeOptions.find((item) => item.key === range)?.label ?? "",
             hint: detail?.bucket_sec
-              ? `${detail.bucket_sec / 60} 分钟一个数据桶`
+              ? detail.bucket_sec >= 3600
+                ? `${detail.bucket_sec / 3600} 小时一个数据桶`
+                : `${detail.bucket_sec / 60} 分钟一个数据桶`
               : "等待详细数据",
           },
           {
@@ -2206,18 +2229,14 @@ function PremiumNetworkView({
             <h3>服务器探测详情</h3>
           </div>
           <div className="premium-probe-network-ranges">
-            {(["1h", "6h", "24h"] as const).map((item) => (
+            {rangeOptions.map((item) => (
               <button
                 type="button"
-                key={item}
-                className={range === item ? "is-active" : undefined}
-                onClick={() => setRange(item)}
+                key={item.key}
+                className={range === item.key ? "is-active" : undefined}
+                onClick={() => setRange(item.key)}
               >
-                {item === "1h"
-                  ? "1 小时"
-                  : item === "6h"
-                    ? "6 小时"
-                    : "24 小时"}
+                {item.label}
               </button>
             ))}
           </div>
@@ -2563,10 +2582,12 @@ function ServerDetailDrawer({
   server,
   index,
   onClose,
+  historyDays,
 }: {
   server: ProbeServer;
   index: number;
   onClose: () => void;
+  historyDays?: number;
 }) {
   const health = serverHealth(server);
   const mem = resourcePercentage(server.mem_used, server.mem_total);
@@ -2585,6 +2606,60 @@ function ServerDetailDrawer({
   const currentBoot = bootTraffic(server);
   const formula = trafficFormulaLabel(server);
   const flag = countryFlag(serverRegionKey(server)) || server.region || "";
+  // 连接数：1 小时用列表带的 conn_history，更长的范围按需向 /api/series?metric=system 取。
+  const connRangeOptions = probeRangeOptions(historyDays);
+  const [pickedConnRange, setConnRange] = useState("1h");
+  const connRange = effectiveProbeRange(pickedConnRange, connRangeOptions);
+  const [openedAt] = useState(() => Math.floor(Date.now() / 1000));
+  const [connPayload, setConnPayload] = useState<{
+    range: string;
+    series?: {
+      tcp_connections?: ProbeMetricPoint[];
+      udp_connections?: ProbeMetricPoint[];
+    };
+    bucket_sec?: number;
+    buckets?: number;
+    generated_at?: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!server.conn_history || connRange === "1h") return;
+    const controller = new AbortController();
+    void fetch(`/api/series?server=${index}&metric=system&range=${connRange}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{
+          success: boolean;
+          series?: {
+            tcp_connections?: ProbeMetricPoint[];
+            udp_connections?: ProbeMetricPoint[];
+          };
+          bucket_sec?: number;
+          buckets?: number;
+          generated_at?: number;
+        }>;
+      })
+      .then((body) =>
+        setConnPayload(body.success ? { ...body, range: connRange } : null),
+      )
+      .catch(() => {
+        if (!controller.signal.aborted) setConnPayload(null);
+      });
+    return () => controller.abort();
+  }, [connRange, index, server.conn_history]);
+  const connCurrent = connPayload?.range === connRange ? connPayload : null;
+  const connSeries =
+    connRange === "1h"
+      ? undefined
+      : connHistoryFromSeries(
+          connCurrent?.series?.tcp_connections,
+          connCurrent?.series?.udp_connections,
+          connCurrent?.generated_at ?? openedAt,
+          connCurrent?.bucket_sec ?? probeRangeBucketSec(connRange),
+          connCurrent?.buckets ?? probeRangeBucketCount(connRange),
+        );
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", close);
@@ -2635,6 +2710,41 @@ function ServerDetailDrawer({
             <strong>{latency === undefined ? "—" : `${latency} ms`}</strong>
           </div>
         </div>
+        {server.conn_history && (
+          <section className="premium-probe-drawer-section premium-probe-drawer-conns">
+            <div className="premium-probe-traffic-heading">
+              <h3 title={CONN_COUNT_HINT}>系统连接数</h3>
+              <div role="group" aria-label="连接数时间范围">
+                {connRangeOptions.map((item) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={connRange === item.key ? "is-active" : ""}
+                    onClick={() => setConnRange(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="premium-probe-drawer-conn-legend">
+              <span>
+                <ConnLegendDot kind="tcp" />
+                TCP {connCount(server.tcp_connections)}
+              </span>
+              <span>
+                <ConnLegendDot kind="udp" />
+                UDP {connCount(server.udp_connections)}
+              </span>
+              <small>整机连接 · 每个时间桶取均值</small>
+            </p>
+            <ConnSparkline
+              history={connSeries ?? server.conn_history}
+              labels={connSeries?.times.map(formatAxisDateTime)}
+              className="premium-probe-drawer-conn-chart"
+            />
+          </section>
+        )}
         <section className="premium-probe-drawer-section">
           <h3>流量统计口径</h3>
           <div className="premium-probe-traffic-accounting">
@@ -2806,7 +2916,11 @@ function ServerDetailDrawer({
           </div>
           <div>
             <span>到期时间</span>
-            <strong>{server.expires_at || "—"}</strong>
+            <strong>
+              {server.renewal_cycle === "permanent"
+                ? "永久"
+                : server.expires_at || "—"}
+            </strong>
           </div>
           <div>
             <span>续费价格</span>
@@ -3029,6 +3143,7 @@ export function PremiumProbePage({
             servers={servers}
             forwardChains={data?.forward}
             triISP={data?.tri_isp}
+            historyDays={data?.history_days}
           />
         ) : view === "resource" ? (
           <PremiumResourceOverview
@@ -3211,6 +3326,7 @@ export function PremiumProbePage({
           server={servers[selectedServerIndex]}
           index={selectedServerIndex}
           onClose={closeServerDetail}
+          historyDays={data?.history_days}
         />
       )}
 

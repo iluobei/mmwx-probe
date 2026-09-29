@@ -401,16 +401,26 @@ button {
   gap: 8px;
   font-size: 12px;
 }
-.metric-head span {
+.metric-head > span {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 5px;
   color: var(--muted);
 }
-.metric-head strong {
-  font-weight: 500;
+.metric-head > span > svg {
+  flex-shrink: 0;
+}
+/* 挤的时候省略标签、数值完整显示（同内置探针）。以前反过来：「本周期计费用量」
+   被折成两行，数值还被截成「386 GB / 1000...」。 */
+.metric-label {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.metric-head strong {
+  flex-shrink: 0;
+  font-weight: 500;
   white-space: nowrap;
 }
 .metric-button {
@@ -879,25 +889,100 @@ button {
   font-size: 10px;
   text-align: left;
 }
+/* 本次开机网卡 / 系统连接数：与内置探针卡片同一排布 —— 左右留出与网速行相同的 17px，
+   图标或名称在左、数值靠右。开机网卡紧跟网速行（同一块，不另起分隔线），连接数单独一块。 */
 .cumulative-traffic,
 .conn-counts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding-top: 8px;
+  gap: 4px 20px;
+  margin: 0 17px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.speed + .cumulative-traffic {
+  margin-top: -5px;
+  padding-top: 0;
+  border-top: 0;
+}
 .cumulative-traffic small,
 .conn-counts small {
+  display: flex;
   grid-column: 1 / -1;
-  color: var(--muted);
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
 }
-.cumulative-traffic span:last-child,
-.conn-counts span:last-child {
-  text-align: right;
+.conn-counts small em {
+  margin-left: auto;
+  font-style: normal;
+}
+.cumulative-traffic > span,
+.conn-counts > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.conn-counts b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: inherit;
+}
+/* 连接数小折线图（探针配置开了才有数据），点开看更长的历史。颜色可由主题覆盖 --conn-tcp / --conn-udp。 */
+.conn-sparkline-button {
+  display: block;
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.conn-sparkline {
+  display: block;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 36px;
+  margin-top: 4px;
+  overflow: visible;
+  color: var(--muted);
+}
+.conn-sparkline-base {
+  stroke: currentColor;
+  stroke-opacity: 0.15;
+}
+.conn-sparkline-tcp,
+.conn-sparkline-udp {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.conn-sparkline-tcp {
+  stroke: var(--conn-tcp, #3b82f6);
+}
+.conn-sparkline-udp {
+  stroke: var(--conn-udp, #8b5cf6);
+}
+.conn-legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.conn-legend-dot.tcp {
+  background: var(--conn-tcp, #3b82f6);
+}
+.conn-legend-dot.udp {
+  background: var(--conn-udp, #8b5cf6);
 }
 .table-ping {
   width: 105px;
@@ -1218,7 +1303,9 @@ footer a:hover {
   width: 68px;
   background: var(--surface);
 }
+/* recharts 3.10 把刻度文字挪到了独立的 z-index 图层(不在 .recharts-xAxis 下),要单独藏 */
 .chart-fixed-y-axis .recharts-xAxis,
+.chart-fixed-y-axis .recharts-xAxis-tick-labels,
 .chart-fixed-y-axis .recharts-cartesian-grid,
 .chart-fixed-y-axis .recharts-line,
 .chart-fixed-y-axis .recharts-tooltip-wrapper {
@@ -1393,6 +1480,8 @@ footer a:hover {
   padding: 14px 0 13px;
 }
 .theme-anime .speed,
+.theme-anime .cumulative-traffic,
+.theme-anime .conn-counts,
 .theme-anime .ping-grid,
 .theme-anime .return-route-badges {
   margin-inline: 0;
@@ -1502,7 +1591,10 @@ footer a:hover {
 }
 .region-globe {
   width: min(100%, 680px);
-  max-height: 410px;
+  /* viewBox 上下各留了 40 给伸出地球的弧线,高度跟着放宽,地球本身大小不变 */
+  max-height: 496px;
+  --arc-from: #3b82f6;
+  --arc-to: #a855f7;
   touch-action: none;
   cursor: grab;
   user-select: none;
@@ -1551,21 +1643,33 @@ footer a:hover {
   place-items: center;
   color: var(--muted);
 }
-.laser-segments {
+.globe-arcs {
+  pointer-events: none;
+}
+.arc-glow,
+.arc-core {
   fill: none;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
-  pointer-events: none;
 }
-.laser-segments.glow {
-  stroke: var(--primary);
-  stroke-width: 6;
-  opacity: 0.42;
+.arc-glow {
+  stroke-width: 5;
+  opacity: 0.55;
 }
-.laser-segments.core {
-  stroke: #fff;
-  stroke-width: 2.2;
-  opacity: 0.95;
+.arc-core {
+  stroke-width: 1.6;
+}
+.arc-from {
+  stop-color: var(--arc-from);
+}
+.arc-to {
+  stop-color: var(--arc-to);
+}
+.arc-packet {
+  fill: #fff;
+}
+.arc-packet-glow {
+  fill: color-mix(in srgb, var(--arc-from) 55%, transparent);
 }
 .region-point {
   fill: #fff;
@@ -1602,7 +1706,6 @@ footer a:hover {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .laser-segments,
   .region-point-halo {
     animation: none;
   }
@@ -1822,7 +1925,7 @@ footer a:hover {
     padding-inline: 6px;
   }
   .region-globe {
-    max-height: 330px;
+    max-height: 400px;
   }
 }
 
