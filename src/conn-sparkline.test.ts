@@ -1,6 +1,7 @@
 import {
   connBucketLabel,
   connHistoryFromSeries,
+  connHoverIndex,
   connSparklineMax,
   connSparklinePath,
 } from "./conn-sparkline";
@@ -60,5 +61,12 @@ const fromSeries = connHistoryFromSeries(
 equal(fromSeries.times, [9300, 9600, 9900], "桶起点");
 equal(fromSeries.tcp, [null, 10, null], "TCP 摊成定长、缺的桶为 null");
 equal(fromSeries.udp, [2, null, 4], "UDP 四舍五入");
+
+equal(
+  [0, 1, 0.5, 0.04, 0.05, -0.3, 1.4].map((f) => connHoverIndex(f, 12)),
+  [0, 11, 6, 0, 1, 0, 11],
+  "悬停位置换算成格子,与折线横坐标对齐并夹在两端",
+);
+equal(connHoverIndex(0.7, 1), 0, "只有一格");
 
 console.log("conn-sparkline ok");

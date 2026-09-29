@@ -3090,6 +3090,21 @@
   color: #dcd1bb;
 }
 
+.premium-probe-drawer-conn-chart .conn-sparkline-tip {
+  border-color: var(--pp-border);
+  color: #eadfc6;
+  background: var(--pp-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.premium-probe-drawer-conn-chart .conn-sparkline-tip small {
+  color: #9c9281;
+}
+
+.premium-probe-drawer-conn-chart .conn-sparkline-dot {
+  border-color: var(--pp-panel);
+}
+
 .premium-probe-drawer-traffic > div {
   display: grid;
   min-height: 28px;
@@ -3454,10 +3469,10 @@
 :root.light .premium-probe-server-status,
 :root.light .premium-probe-card-traffic > span,
 :root.light .premium-probe-card-latency > span,
-:root.light .premium-probe-drawer-accounting span,
-:root.light .premium-probe-drawer-accounting p,
-:root.light .premium-probe-drawer-traffic-note,
-:root.light .premium-probe-drawer-section-heading button,
+:root.light .premium-probe-traffic-accounting span,
+:root.light .premium-probe-traffic-accounting p,
+:root.light .premium-probe-traffic-note,
+:root.light .premium-probe-traffic-heading button,
 :root.light .premium-probe-drawer p,
 :root.light .premium-probe-drawer small {
   color: #746b5c;
@@ -3503,7 +3518,7 @@
   background-color: rgba(168, 124, 34, 0.045);
 }
 
-:root.light .premium-probe-drawer-accounting {
+:root.light .premium-probe-traffic-accounting {
   border-color: rgba(168, 124, 34, 0.2);
   background: rgba(168, 124, 34, 0.035);
 }
@@ -3543,9 +3558,9 @@
 :root.light .premium-probe-health-score,
 :root.light .premium-probe-card-traffic strong,
 :root.light .premium-probe-card-latency strong,
-:root.light .premium-probe-drawer-accounting strong,
-:root.light .premium-probe-drawer-section-heading button:hover,
-:root.light .premium-probe-drawer-section-heading button.is-active {
+:root.light .premium-probe-traffic-accounting strong,
+:root.light .premium-probe-traffic-heading button:hover,
+:root.light .premium-probe-traffic-heading button.is-active {
   color: #8a6210;
 }
 
@@ -3560,6 +3575,15 @@
 
 :root.light .premium-probe-drawer-conn-chart {
   color: #5c5343;
+}
+
+:root.light .premium-probe-drawer-conn-chart .conn-sparkline-tip {
+  color: #2c251a;
+  box-shadow: 0 8px 24px rgba(74, 58, 28, 0.18);
+}
+
+:root.light .premium-probe-drawer-conn-chart .conn-sparkline-tip small {
+  color: #746b5c;
 }
 
 :root.light .premium-probe-map aside {
@@ -4489,4 +4513,76 @@
 .premium-probe-drawer-unlocks p {
   color: #71695d;
   font-size: 0.64rem;
+}
+
+/* 亮色主题下的抽屉与筛选:暗色主题的浅金、浅灰字原样搬到香槟白底上几乎看不见,逐项压深。 */
+:root.light .premium-probe-drawer > header span,
+:root.light .premium-probe-drawer-health p,
+:root.light .premium-probe-drawer-metrics span,
+:root.light .premium-probe-drawer-info span,
+:root.light .premium-probe-drawer-pings small,
+:root.light .premium-probe-drawer-traffic span {
+  color: #746b5c;
+}
+
+:root.light .premium-probe-drawer-health > strong:not([data-tone="warning"]):not([data-tone="critical"]) {
+  color: #2f8a3a;
+}
+
+:root.light .premium-probe-drawer-health > strong[data-tone="critical"] {
+  color: #c0342c;
+}
+
+:root.light .premium-probe-drawer-health span {
+  color: #2c251a;
+}
+
+:root.light .premium-probe-drawer-metrics strong,
+:root.light .premium-probe-drawer-pings strong,
+:root.light .premium-probe-drawer-traffic strong,
+:root.light .premium-probe-drawer-routes b {
+  color: #8a6210;
+}
+
+:root.light .premium-probe-drawer-pings span,
+:root.light .premium-probe-drawer-info strong,
+:root.light .premium-probe-drawer-unlocks {
+  color: #3a3226;
+}
+
+:root.light .premium-probe-drawer-routes small {
+  color: #6f6552;
+  background: rgba(168, 124, 34, 0.08);
+}
+
+:root.light .premium-probe-drawer-unlocks .unlock-tabs {
+  background: rgba(168, 124, 34, 0.07);
+}
+
+:root.light .premium-probe-drawer-unlocks .unlock-tabs button {
+  color: #6f6552;
+}
+
+:root.light .premium-probe-drawer-unlocks .unlock-tabs button[data-active] {
+  background: rgba(168, 124, 34, 0.16);
+  color: #5c3f08;
+}
+
+:root.light .premium-probe-drawer-unlocks li {
+  border-bottom-color: rgba(168, 124, 34, 0.14);
+}
+
+:root.light .premium-probe-drawer-unlocks .unlock-row-status[data-tone="muted"] {
+  color: #6f6552;
+}
+
+:root.light .premium-probe-filters button:not(.is-active):not(:hover),
+:root.light .premium-probe-filters label,
+:root.light .premium-probe-view-toggle button:not(.is-active) {
+  color: #5c5343;
+}
+
+/* 外置探针的选中按钮在亮色下仍是金色底,字保持深色(上面沿用内置的规则会把它染成深金色) */
+:root.light .premium-probe-traffic-heading button.is-active {
+  color: #17130d;
 }

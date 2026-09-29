@@ -202,12 +202,14 @@ function formatTrafficCompact(value = 0): string {
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let size = Math.max(0, value);
   let index = 0;
-  while (size >= 1024 && index < units.length - 1) {
+  // 到 1000 就进下一级(除数仍是 1024):「1000 GB」太长;进位后不足 1 的(0.98 TB)留 1 位,显示成「1 TB」
+  while (size >= 1000 && index < units.length - 1) {
     size /= 1024;
     index++;
   }
-  const digits = index === 0 || size >= 100 ? 0 : size >= 10 ? 1 : 2;
-  return `${size.toFixed(digits)} ${units[index]}`;
+  const digits =
+    index === 0 || size >= 100 ? 0 : size >= 10 || size < 1 ? 1 : 2;
+  return `${size.toFixed(digits).replace(/\.0+$/, "")} ${units[index]}`;
 }
 
 function formatSignedTraffic(value: number): string {

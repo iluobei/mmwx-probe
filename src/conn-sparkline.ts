@@ -82,3 +82,9 @@ export function connBucketLabel(i: number, n: number): string {
   const ago = (n - 1 - i) * CONN_BUCKET_MINUTES;
   return ago <= 0 ? "最近 5 分钟" : `约 ${ago} 分钟前`;
 }
+
+/** 悬停位置(0~1,相对图宽)落在哪一格:与 connSparklinePath 的横坐标一致,第 i 格在 i/(n-1)。 */
+export function connHoverIndex(fraction: number, n: number): number {
+  if (n <= 1) return 0;
+  return Math.min(n - 1, Math.max(0, Math.round(fraction * (n - 1))));
+}

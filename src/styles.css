@@ -438,11 +438,9 @@ button {
   cursor: pointer;
 }
 .metric-hover-detail {
-  position: absolute;
-  bottom: calc(100% + 7px);
-  left: 50%;
-  z-index: 20;
-  display: none;
+  /* 挂在 body 上,位置由 useHoverBubble 按触发元素算好(top 或 bottom 二选一) */
+  position: fixed;
+  z-index: 60;
   width: max-content;
   max-width: 250px;
   padding: 7px 10px;
@@ -460,10 +458,6 @@ button {
 .metric-hover-detail small {
   display: block;
   font: inherit;
-}
-.metric-button:hover .metric-hover-detail,
-.metric-button:focus-visible .metric-hover-detail {
-  display: block;
 }
 .meter {
   height: 6px;
@@ -946,6 +940,7 @@ button {
   cursor: pointer;
 }
 .conn-sparkline {
+  position: relative;
   display: block;
   grid-column: 1 / -1;
   width: 100%;
@@ -953,6 +948,54 @@ button {
   margin-top: 4px;
   overflow: visible;
   color: var(--muted);
+}
+.conn-sparkline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+/* 悬停读数:竖线 + 两条线上的圆点 + 时间与数值 */
+.conn-sparkline-guide {
+  stroke: currentColor;
+  stroke-opacity: 0.4;
+}
+.conn-sparkline-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.conn-sparkline-dot.tcp {
+  background: var(--conn-tcp, #3b82f6);
+}
+.conn-sparkline-dot.udp {
+  background: var(--conn-udp, #8b5cf6);
+}
+.conn-sparkline-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  padding: 3px 8px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.conn-sparkline-tip small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
 }
 .conn-sparkline-base {
   stroke: currentColor;

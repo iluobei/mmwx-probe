@@ -213,11 +213,47 @@ function bytes(value = 0, decimal = true, base = 1024): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let n = Math.max(0, value);
   let i = 0;
-  while (n >= base && i < units.length - 1) {
+  // 到 1000 就进下一级(除数仍是 base):「1000 GB」四位数太长,卡片里会把前面的标签挤成省略号
+  while (n >= Math.min(base, 1000) && i < units.length - 1) {
     n /= base;
     i++;
   }
-  return `${n.toFixed(decimal && i >= 2 ? 1 : 0)} ${units[i]}`;
+  const text = n.toFixed(decimal && i >= 2 ? 1 : 0).replace(/\.0$/, "");
+  return `${text} ${units[i]}`;
+}
+
+// 悬停说明挂到 body 上、按触发元素 fixed 定位:放在卡片里绝对定位会被 .server-card 的
+// overflow:hidden 裁掉。离视口顶不足 180px(放不下)就放到下方;只响应鼠标,触屏点按照旧打开弹窗。
+function useHoverBubble() {
+  const [pos, setPos] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+  }>();
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(undefined);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [pos]);
+  const show = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== "mouse") return;
+    const r = event.currentTarget.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(r.left + r.width / 2, 140),
+      window.innerWidth - 140,
+    );
+    setPos(
+      r.top > 180
+        ? { left, bottom: window.innerHeight - r.top + 7 }
+        : { left, top: r.bottom + 7 },
+    );
+  };
+  return { pos, show, hide: () => setPos(undefined) };
 }
 
 function signedBytes(value: number): string {
@@ -1467,6 +1503,7 @@ function ServerCard({
 }) {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
+  const trafficBubble = useHoverBubble();
   const name = server.name || `服务器 ${index + 1}`;
   const flag = regionFlag(server.region_country || server.region);
   const trafficUsed = billableTraffic(server);
@@ -1517,7 +1554,12 @@ function ServerCard({
           <button
             type="button"
             className="metric metric-button"
-            onClick={() => setTrafficOpen(true)}
+            onClick={() => {
+              trafficBubble.hide();
+              setTrafficOpen(true);
+            }}
+            onPointerEnter={trafficBubble.show}
+            onPointerLeave={trafficBubble.hide}
           >
             <div className="metric-head">
               <span>
@@ -1539,31 +1581,38 @@ function ServerCard({
                 }}
               />
             </div>
-            <span className="metric-hover-detail">
-              <small>计费规则：{trafficRuleLabel(server)}</small>
-              {formula && <small>计费用量 = {formula}</small>}
-              {(server.traffic_used_up !== undefined ||
-                server.traffic_used_down !== undefined) && (
-                <small>
-                  原始周期 ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
-                  {bytes(server.traffic_used_down, false)}
-                </small>
+            {trafficBubble.pos &&
+              createPortal(
+                <span
+                  className="metric-hover-detail"
+                  style={trafficBubble.pos}
+                >
+                  <small>计费规则：{trafficRuleLabel(server)}</small>
+                  {formula && <small>计费用量 = {formula}</small>}
+                  {(server.traffic_used_up !== undefined ||
+                    server.traffic_used_down !== undefined) && (
+                    <small>
+                      原始周期 ↑ {bytes(server.traffic_used_up, false)} · ↓{" "}
+                      {bytes(server.traffic_used_down, false)}
+                    </small>
+                  )}
+                  {server.traffic_adjustment !== undefined &&
+                    server.traffic_adjustment !== 0 && (
+                      <small>
+                        对账调整：{signedBytes(server.traffic_adjustment)}
+                      </small>
+                    )}
+                  {server.period_start && server.period_end && (
+                    <small>
+                      {server.period_start} — {server.period_end}
+                    </small>
+                  )}
+                  {!!server.daily_traffic?.length && (
+                    <small>点击查看原始上下行趋势</small>
+                  )}
+                </span>,
+                document.body,
               )}
-              {server.traffic_adjustment !== undefined &&
-                server.traffic_adjustment !== 0 && (
-                  <small>
-                    对账调整：{signedBytes(server.traffic_adjustment)}
-                  </small>
-                )}
-              {server.period_start && server.period_end && (
-                <small>
-                  {server.period_start} — {server.period_end}
-                </small>
-              )}
-              {!!server.daily_traffic?.length && (
-                <small>点击查看原始上下行趋势</small>
-              )}
-            </span>
           </button>
         )}
       </div>
