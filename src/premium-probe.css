@@ -954,6 +954,9 @@
 
 .premium-probe-map aside {
   min-width: 0;
+  /* 地区多了列表会把整张卡片撑高,超出地球那块的高度就在列表里滚动 */
+  max-height: clamp(305px, 22vw, 350px);
+  overflow-y: auto;
   padding: 0.9rem;
   border-left: 1px solid rgba(216, 180, 106, 0.2);
   background: rgba(0, 0, 0, 0.14);
@@ -1094,7 +1097,13 @@
 .premium-probe-globe-stage
   svg.is-dragging
   [data-premium-probe-country].is-active,
-.premium-probe-globe-stage svg.is-dragging .premium-probe-globe-outline {
+.premium-probe-globe-stage svg.is-dragging .premium-probe-globe-outline,
+.premium-probe-globe-stage svg.is-dragging .premium-probe-orbit-labels circle,
+.premium-probe-globe-stage
+  svg.is-dragging
+  .premium-probe-node-connections
+  circle {
+  /* 拖动时去掉滤镜:每帧给十几个光点算 drop-shadow 会明显掉帧 */
   filter: none;
 }
 
@@ -1126,7 +1135,8 @@
   filter: drop-shadow(0 0 5px #f0bd4e);
 }
 
-.premium-probe-orbit-labels line {
+.premium-probe-orbit-labels polyline {
+  fill: none;
   stroke: rgba(216, 180, 106, 0.78);
   stroke-width: 1;
 }
@@ -1147,7 +1157,7 @@
 /* 转到地球背面的地区:标签留在原地(不然一拖就少一半),但压暗,
    跟正面的区分开 —— 地平线那头的东西不该和眼前的一样亮。 */
 .premium-probe-orbit-labels .is-behind {
-  opacity: 0.42;
+  opacity: 0.55;
 }
 
 .premium-probe-orbit-labels .is-behind circle {
@@ -3668,7 +3678,33 @@
 
 :root.light .premium-probe-orbit-labels rect {
   fill: rgba(255, 253, 248, 0.96);
-  stroke: rgba(168, 124, 34, 0.52);
+  stroke: rgba(168, 124, 34, 0.72);
+}
+
+/* 浅色主题:引线、轨道连线原来沿用深色主题的浅金色,画在米白底上几乎看不见(用户实报)。
+   换成与外圈同一色系的深金,背面标签也少压一点。 */
+:root.light .premium-probe-orbit-labels polyline {
+  stroke: rgba(150, 106, 22, 0.85);
+  stroke-width: 1.1;
+}
+
+:root.light .premium-probe-orbit-labels circle {
+  fill: #c8962d;
+  stroke: #fff8e6;
+}
+
+:root.light .premium-probe-node-connections path {
+  stroke: rgba(150, 106, 22, 0.62);
+}
+
+:root.light .premium-probe-node-connections circle {
+  fill: #e0b04a;
+  stroke: #8a6114;
+  filter: drop-shadow(0 0 3px rgba(168, 124, 34, 0.55));
+}
+
+:root.light .premium-probe-orbit-labels .is-behind {
+  opacity: 0.68;
 }
 
 :root.light .premium-probe-orbit-label-content {

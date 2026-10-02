@@ -3,6 +3,7 @@ import {
   GLOBE_CENTER,
   LABEL_MIN_GAP,
   layoutOrbit,
+  MAX_ORBIT_LABELS,
 } from './orbit-layout'
 import type { PremiumProbeRegion } from './BlackGoldGlobe'
 
@@ -100,4 +101,25 @@ const ORBIT_RADIUS = 145
     Math.hypot(zz.x - GLOBE_CENTER.x, zz.y - GLOBE_CENTER.y) > 100,
     '兜底的标签也该在环上'
   )
+}
+
+// 冰岛实报:9 个地区时第 8、9 个(冰岛、法国)从前被写死的 7 个上限截掉了。
+{
+  ok(MAX_ORBIT_LABELS >= 9, `上限只有 ${MAX_ORBIT_LABELS}`)
+  const nine = ['SG', 'HK', 'US', 'JP', 'PH', 'NO', 'IE', 'IS', 'FR']
+  const coords = new Map(coordinates)
+  coords.set('PH', [122.0, 13.0])
+  coords.set('NO', [10.2, 59.1])
+  coords.set('IE', [-6.3, 53.3])
+  coords.set('IS', [-21.9, 64.1])
+  coords.set('FR', [2.3, 46.6])
+  const angles = layoutOrbit(nine.map(region), coords, [-108, -16], ORBIT_RADIUS)
+    .map((p) => p.radians)
+    .sort((a, b) => a - b)
+  for (let i = 1; i < angles.length; i++) {
+    ok(
+      angles[i] - angles[i - 1] >= LABEL_MIN_GAP - 1e-9,
+      `第 ${i} 个标签间隔 ${angles[i] - angles[i - 1]} 小于下限 ${LABEL_MIN_GAP}`
+    )
+  }
 }
