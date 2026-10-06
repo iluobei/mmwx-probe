@@ -122,12 +122,27 @@ export interface ForwardChainServerData {
   name: string;
   to_next_ms: number;
   healthy: boolean;
+  loss_pct?: number;
+  /** 选路段分叉那组的成员:当前走的路 */
+  route?: string;
 }
 export interface ForwardChainGroupData {
   name: string;
   role: "entry" | "mid" | "exit";
   to_next_ms: number;
+  loss_pct?: number;
   servers: ForwardChainServerData[];
+}
+/** 选路段的一条路(主控 #1136):分叉那组到下一组之间并行的几条之一 */
+export interface ForwardChainRoute {
+  name: string;
+  /** 依次绕经的中转组;空 = 直连下一组 */
+  via: string[];
+  /** 经这条路到出口的总延迟;0 = 没测到 */
+  latency_ms: number;
+  loss_pct: number;
+  selected: boolean;
+  selected_by?: string[];
 }
 export interface ForwardChainBucket {
   ts: number;
@@ -151,6 +166,11 @@ export interface ForwardChainData {
   end_to_end_ms: number;
   loss_pct: number;
   groups: ForwardChainGroupData[];
+  /** 有选路段时:groups[route_hop] 到下一组之间是 routes 这几条并行的路;老主控不带 */
+  route_hop?: number;
+  route_policy?: string;
+  failover_ms?: number;
+  routes?: ForwardChainRoute[];
   bucket_sec: number;
   trend: ForwardChainBucket[];
   traffic?: ForwardChainTraffic | null;
