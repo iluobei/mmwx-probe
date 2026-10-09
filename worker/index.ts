@@ -95,6 +95,20 @@ async function proxyAuth(
   });
 }
 
+// 密钥由本 Worker 代加,主控见密钥即放行,来源只能在这里校验(判据对齐主控 probeSameOriginRequest):
+// 别的网站在浏览器里 fetch / 嵌入探针接口一律 404,没有任何来源信息的裸请求同样拒绝。
+function fromOwnPage(request: Request, self: string): boolean {
+  const origin = request.headers.get("Origin");
+  if (origin) return origin === self;
+  const site = request.headers.get("Sec-Fetch-Site");
+  if (site) return site === "same-origin";
+  try {
+    return new URL(request.headers.get("Referer") ?? "").origin === self;
+  } catch {
+    return false;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const incoming = new URL(request.url);
@@ -112,6 +126,8 @@ export default {
     if (!target) return env.ASSETS.fetch(request);
     if (request.method !== "GET")
       return new Response("Method not allowed", { status: 405 });
+    if (!fromOwnPage(request, incoming.origin))
+      return new Response("Not found", { status: 404 });
     if (!env.PROBE_TOKEN) {
       return new Response("Probe access secret is not configured", {
         status: 503,

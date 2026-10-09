@@ -95,6 +95,11 @@ import { useProbe } from "./use-probe";
 import { ConnLegendDot, ConnSparkline } from "./ConnSparkline";
 import { connHistoryFromSeries, type ProbeMetricPoint } from "./conn-sparkline";
 import {
+  resourceHistoryFromSeries,
+  type ResourceMetric,
+  type ResourceSeriesInput,
+} from "./resource-history";
+import {
   effectiveProbeRange,
   probeRangeBucketCount,
   probeRangeBucketSec,
@@ -172,9 +177,26 @@ function HorizontalChart({
   useLayoutEffect(() => {
     if (ref.current) ref.current.scrollLeft = ref.current.scrollWidth;
   }, [width]);
+  // 固定纵轴要和滚动区里的图一样高:横向滚动条(Windows / 常显滚动条时)占掉的那截不算,
+  // 否则两边纵轴比例对不上,刻度错开几像素叠成「重影」(#973)。
+  const [gutter, setGutter] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () =>
+      setGutter(Math.max(0, el.offsetHeight - el.clientHeight));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <div className="chart-scroll-frame">
-      <div className="chart-fixed-y-axis" aria-hidden="true">
+      <div
+        className="chart-fixed-y-axis"
+        aria-hidden="true"
+        style={{ bottom: gutter }}
+      >
         <div className="chart-scroll-inner" style={{ width, minWidth: "100%" }}>
           {children}
         </div>
@@ -394,14 +416,16 @@ function Meter({
   label,
   value,
   percent,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   percent: number;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="metric">
+  const body = (
+    <>
       <div className="metric-head">
         <span>
           {icon}
@@ -412,7 +436,15 @@ function Meter({
       <div className="meter">
         <i style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
       </div>
-    </div>
+    </>
+  );
+  // 可点的（CPU / 内存 / 硬盘点开看历史）沿用流量那格的按钮样式。
+  return onClick ? (
+    <button type="button" className="metric metric-button" onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <div className="metric">{body}</div>
   );
 }
 
@@ -1075,6 +1107,176 @@ function ConnDialog({
   );
 }
 
+// 资源使用率三条线配色（CPU / 内存 / 硬盘），主题可用 --res-* 覆盖。
+const RESOURCE_COLORS: Record<ResourceMetric, string> = {
+  cpu: "var(--res-cpu, #3b82f6)",
+  mem: "var(--res-mem, #10b981)",
+  disk: "var(--res-disk, #f59e0b)",
+};
+const RESOURCE_NAMES: Record<ResourceMetric, string> = {
+  cpu: "CPU",
+  mem: "内存",
+  disk: "硬盘",
+};
+
+// ResourceDialog CPU / 内存 / 硬盘使用率历史（三条线同一张 0–100% 的图），
+// 点哪一格打开就加粗哪一条。与连接数同一个 /api/series?metric=system，
+// 老主控不带 disk 列时硬盘那条为空。
+function ResourceDialog({
+  serverIndex,
+  title,
+  focus,
+  close,
+}: {
+  serverIndex: number;
+  title: string;
+  focus: ResourceMetric;
+  close: () => void;
+}) {
+  const [range, setRange, rangeOptions] = useProbeRange();
+  const [loading, setLoading] = useState(false);
+  const [payload, setPayload] = useState<{
+    range: string;
+    series?: ResourceSeriesInput;
+    bucket_sec?: number;
+    buckets?: number;
+    generated_at?: number;
+  } | null>(null);
+  const [openedAt] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    void fetch(
+      `/api/series?server=${serverIndex}&metric=system&range=${range}`,
+      {
+        cache: "no-store",
+        signal: controller.signal,
+      },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{
+          success: boolean;
+          series?: ResourceSeriesInput;
+          bucket_sec?: number;
+          buckets?: number;
+          generated_at?: number;
+        }>;
+      })
+      .then((body) => setPayload(body.success ? { ...body, range } : null))
+      .catch(() => {
+        if (!controller.signal.aborted) setPayload(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [range, serverIndex]);
+
+  const current = payload?.range === range ? payload : null;
+  const history = resourceHistoryFromSeries(
+    current?.series,
+    current?.generated_at ?? openedAt,
+    current?.bucket_sec ?? probeRangeBucketSec(range),
+    current?.buckets ?? probeRangeBucketCount(range),
+  );
+  const rows = history.times.map((t, i) => ({
+    time: formatAxisDateTime(t),
+    cpu: history.cpu[i],
+    mem: history.mem[i],
+    disk: history.disk[i],
+  }));
+  const metrics: ResourceMetric[] = ["cpu", "mem", "disk"];
+
+  return createPortal(
+    <div className="modal-backdrop" role="presentation" onMouseDown={close}>
+      <section
+        className="modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h2>{title} · 资源使用率趋势</h2>
+          <button aria-label="关闭" onClick={close}>
+            ×
+          </button>
+        </header>
+        <div className="ranges">
+          {rangeOptions.map((item) => (
+            <button
+              type="button"
+              className={range === item.key ? "active" : ""}
+              onClick={() => setRange(item.key)}
+              key={item.key}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="chart">
+          {loading && <div className="loading-overlay">加载中…</div>}
+          <HorizontalChart width={Math.max(760, rows.length * 82)}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={rows}
+                margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+              >
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  minTickGap={28}
+                />
+                <YAxis
+                  width={44}
+                  domain={[0, 100]}
+                  unit="%"
+                  tick={{ fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                  formatter={(value, name) => [
+                    `${Number(value).toFixed(1)} %`,
+                    String(name),
+                  ]}
+                />
+                {metrics.map((m) => (
+                  <Line
+                    key={m}
+                    type="monotone"
+                    dataKey={m}
+                    name={RESOURCE_NAMES[m]}
+                    stroke={RESOURCE_COLORS[m]}
+                    strokeWidth={m === focus ? 2.5 : 1.25}
+                    strokeOpacity={m === focus ? 1 : 0.6}
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </HorizontalChart>
+        </div>
+        <div className="legend">
+          {metrics.map((m) => (
+            <span key={m}>
+              <i style={{ background: RESOURCE_COLORS[m] }} />
+              {RESOURCE_NAMES[m]}
+            </span>
+          ))}
+          <span>每个时间桶取均值</span>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
 function PingPanel({
   ping,
   serverIndex,
@@ -1503,6 +1705,9 @@ function ServerCard({
 }) {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
+  const [resourceFocus, setResourceFocus] = useState<ResourceMetric | null>(
+    null,
+  );
   const trafficBubble = useHoverBubble();
   const name = server.name || `服务器 ${index + 1}`;
   const flag = regionFlag(server.region_country || server.region);
@@ -1532,6 +1737,7 @@ function ServerCard({
             label="CPU"
             value={`${server.cpu_pct.toFixed(1)}%`}
             percent={server.cpu_pct}
+            onClick={() => setResourceFocus("cpu")}
           />
         )}
         {server.mem_total !== undefined && (
@@ -1540,6 +1746,7 @@ function ServerCard({
             label="内存"
             value={`${pct(server.mem_used, server.mem_total).toFixed(1)}%`}
             percent={pct(server.mem_used, server.mem_total)}
+            onClick={() => setResourceFocus("mem")}
           />
         )}
         {server.disk_total !== undefined && (
@@ -1548,6 +1755,7 @@ function ServerCard({
             label="硬盘"
             value={`${pct(server.disk_used, server.disk_total).toFixed(1)}%`}
             percent={pct(server.disk_used, server.disk_total)}
+            onClick={() => setResourceFocus("disk")}
           />
         )}
         {trafficUsed !== undefined && (
@@ -1748,6 +1956,14 @@ function ServerCard({
       )}
       {trafficOpen && (
         <TrafficDialog server={server} close={() => setTrafficOpen(false)} />
+      )}
+      {resourceFocus && (
+        <ResourceDialog
+          serverIndex={index}
+          title={name}
+          focus={resourceFocus}
+          close={() => setResourceFocus(null)}
+        />
       )}
     </article>
   );

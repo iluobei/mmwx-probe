@@ -16,7 +16,15 @@ import {
 } from "lucide-react";
 import { triISPRows } from "./tri-isp";
 import { CONN_COUNT_HINT, connCount, UnlockTabbedList } from "./App";
-import { ConnLegendDot, ConnSparkline } from "./ConnSparkline";
+import {
+  ConnLegendDot,
+  ConnSparkline,
+  ResourceSparkline,
+} from "./ConnSparkline";
+import {
+  resourceHistoryFromSeries,
+  type ResourceSeriesInput,
+} from "./resource-history";
 import { connHistoryFromSeries, type ProbeMetricPoint } from "./conn-sparkline";
 import {
   effectiveProbeRange,
@@ -1745,19 +1753,20 @@ const routePolicyLabel: Record<string, string> = {
   weighted: "按权重分流",
 };
 
-/** 选路段:分叉那组到下一组之间并行的几条路,标出在用的那条(主控 #1136) */
+/** 选路段:分叉那组到下一组之间并行的几条路,标出在用的那条 */
 function ForwardRoutes({ chain }: { chain: ForwardChainData }) {
   const routes = chain.routes ?? [];
   return (
     <div className="rroutes">
       <div className="rr-h">
-        选路 · {routePolicyLabel[chain.route_policy ?? ""] ?? chain.route_policy}
+        选路 ·{" "}
+        {routePolicyLabel[chain.route_policy ?? ""] ?? chain.route_policy}
         {chain.failover_ms ? ` · 故障转移 ${chain.failover_ms}ms` : ""}
       </div>
       {routes.map((r) => (
         <div
           key={r.name}
-          className={`rr${r.selected ? " is-on" : ""}`}
+          className={cn("rr", r.selected && "is-on")}
           title={
             r.selected_by?.length
               ? `正在走:${r.selected_by.join("、")}`
@@ -1768,13 +1777,76 @@ function ForwardRoutes({ chain }: { chain: ForwardChainData }) {
           <span className="rv">
             {r.via.length ? `经 ${r.via.join(" → ")}` : "直连"}
           </span>
-          <span className={`rl ${forwardLatencyClass(r.latency_ms)}`}>
+          <span className={cn("rl", forwardLatencyClass(r.latency_ms))}>
             {r.latency_ms > 0 ? `${r.latency_ms} ms` : "—"}
           </span>
           {r.loss_pct > 0 && <span className="rlo">丢 {r.loss_pct}%</span>}
           {r.selected && <span className="ron">在用</span>}
         </div>
       ))}
+    </div>
+  );
+}
+
+const forwardCellLabel: Record<string, string> = {
+  o: "正常",
+  d: "降级",
+  b: "中断",
+  n: "无数据",
+};
+const FORWARD_CELL_MIN = 20;
+
+// 第 ago 格之前(0 = 当前这一格)。只按格子位置算,不读时钟:渲染要保持纯函数
+const forwardCellAgo = (ago: number) => {
+  if (ago <= 0) return "当前";
+  const min = ago * FORWARD_CELL_MIN;
+  const h = Math.floor(min / 60);
+  return `约 ${h ? `${h} 小时` : ""}${h && min % 60 ? " " : ""}${min % 60 ? `${min % 60} 分钟` : ""}前`;
+};
+
+/** 可用率 + 近 24 小时状态条(20 分钟一格,最后一格 = 当前) */
+function ForwardAvailability({ chain }: { chain: ForwardChainData }) {
+  const cells = chain.cells ?? "";
+  const avail = chain.availability_24h;
+  // 没采过样的链(全是无数据、也没有可用率)不占位置
+  if ((avail === undefined || avail === null) && !/[odb]/.test(cells))
+    return null;
+  return (
+    <div className="premium-probe-forward-avail">
+      <div className="head">
+        <span className="k">可用率 · 近 24 小时</span>
+        <span className="v">
+          {avail === undefined || avail === null
+            ? "—"
+            : avail >= 1
+              ? "100"
+              : (avail * 100).toFixed(2)}
+          <span className="u">%</span>
+        </span>
+      </div>
+      {cells && (
+        <div className="bar" role="img" aria-label="近 24 小时状态">
+          {[...cells].map((ch, i) => (
+            <i
+              key={i}
+              className={`is-${forwardCellLabel[ch] ? ch : "n"}`}
+              title={`${forwardCellAgo(cells.length - 1 - i)} · ${forwardCellLabel[ch] ?? forwardCellLabel.n}`}
+            />
+          ))}
+        </div>
+      )}
+      <div className="axis">
+        <span>24 小时前</span>
+        <span className="lg">
+          {Object.entries(forwardCellLabel).map(([ch, label]) => (
+            <span key={ch}>
+              <i className={`is-${ch}`} />
+              {label}
+            </span>
+          ))}
+        </span>
+        <span>现在</span>
+      </div>
     </div>
   );
 }
@@ -1880,7 +1952,12 @@ function ForwardChainView({ wsChains }: { wsChains?: ForwardChainData[] }) {
             {chain.loss_pct.toFixed(1)}
             <span className="u">%</span>
           </div>
-          <div className="foot">全链探测点均值</div>
+          <div className="foot">
+            {chain.jitter_ms !== undefined && chain.jitter_ms !== null
+              ? `抖动 ${chain.jitter_ms < 10 ? chain.jitter_ms.toFixed(1) : Math.round(chain.jitter_ms)} ms · `
+              : ""}
+            全链探测点均值
+          </div>
         </div>
         <div className="stat is-n">
           <div className="k">链路结构</div>
@@ -1904,6 +1981,8 @@ function ForwardChainView({ wsChains }: { wsChains?: ForwardChainData[] }) {
           <div className="foot">近 7 天全链累计</div>
         </div>
       </div>
+
+      <ForwardAvailability chain={chain} />
 
       <section className="premium-probe-forward-card">
         <header>
@@ -2717,6 +2796,62 @@ function ServerDetailDrawer({
           connCurrent?.bucket_sec ?? probeRangeBucketSec(connRange),
           connCurrent?.buckets ?? probeRangeBucketCount(connRange),
         );
+  // 资源使用率（用户反馈没有 CPU / 内存 / 硬盘历史）：同一个 metric=system 序列，
+  // 各自一套时间范围；1 小时也向接口取（列表不带资源历史）。
+  const hasResources =
+    typeof server.cpu_pct === "number" ||
+    typeof mem === "number" ||
+    typeof disk === "number";
+  const [pickedResourceRange, setResourceRange] = useState("1h");
+  const resourceRange = effectiveProbeRange(
+    pickedResourceRange,
+    connRangeOptions,
+  );
+  const [resourcePayload, setResourcePayload] = useState<{
+    range: string;
+    series?: ResourceSeriesInput;
+    bucket_sec?: number;
+    buckets?: number;
+    generated_at?: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!hasResources) return;
+    const controller = new AbortController();
+    void fetch(
+      `/api/series?server=${index}&metric=system&range=${resourceRange}`,
+      {
+        cache: "no-store",
+        signal: controller.signal,
+      },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{
+          success: boolean;
+          series?: ResourceSeriesInput;
+          bucket_sec?: number;
+          buckets?: number;
+          generated_at?: number;
+        }>;
+      })
+      .then((body) =>
+        setResourcePayload(
+          body.success ? { ...body, range: resourceRange } : null,
+        ),
+      )
+      .catch(() => {
+        if (!controller.signal.aborted) setResourcePayload(null);
+      });
+    return () => controller.abort();
+  }, [resourceRange, index, hasResources]);
+  const resourceCurrent =
+    resourcePayload?.range === resourceRange ? resourcePayload : null;
+  const resourceSeries = resourceHistoryFromSeries(
+    resourceCurrent?.series,
+    resourceCurrent?.generated_at ?? openedAt,
+    resourceCurrent?.bucket_sec ?? probeRangeBucketSec(resourceRange),
+    resourceCurrent?.buckets ?? probeRangeBucketCount(resourceRange),
+  );
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", close);
@@ -2767,6 +2902,45 @@ function ServerDetailDrawer({
             <strong>{latency === undefined ? "—" : `${latency} ms`}</strong>
           </div>
         </div>
+        {hasResources && (
+          <section className="premium-probe-drawer-section premium-probe-drawer-conns">
+            <div className="premium-probe-traffic-heading">
+              <h3>资源使用率</h3>
+              <div role="group" aria-label="资源使用率时间范围">
+                {connRangeOptions.map((item) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={resourceRange === item.key ? "is-active" : ""}
+                    onClick={() => setResourceRange(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="premium-probe-drawer-conn-legend">
+              <span>
+                <ConnLegendDot kind="cpu" />
+                CPU
+              </span>
+              <span>
+                <ConnLegendDot kind="mem" />
+                内存
+              </span>
+              <span>
+                <ConnLegendDot kind="disk" />
+                硬盘
+              </span>
+              <small>每个时间桶取均值</small>
+            </p>
+            <ResourceSparkline
+              history={resourceSeries}
+              labels={resourceSeries.times.map(formatAxisDateTime)}
+              className="premium-probe-drawer-conn-chart"
+            />
+          </section>
+        )}
         {server.conn_history && (
           <section className="premium-probe-drawer-section premium-probe-drawer-conns">
             <div className="premium-probe-traffic-heading">

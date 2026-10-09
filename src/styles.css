@@ -1027,6 +1027,31 @@ button {
 .conn-legend-dot.udp {
   background: var(--conn-udp, #8b5cf6);
 }
+/* 资源使用率小折线图（CPU / 内存 / 硬盘），颜色可由主题覆盖 --res-cpu / --res-mem / --res-disk。 */
+.res-sparkline-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.res-sparkline-line.cpu,
+.conn-sparkline-dot.cpu,
+.conn-legend-dot.cpu {
+  stroke: var(--res-cpu, #3b82f6);
+  background: var(--res-cpu, #3b82f6);
+}
+.res-sparkline-line.mem,
+.conn-sparkline-dot.mem,
+.conn-legend-dot.mem {
+  stroke: var(--res-mem, #10b981);
+  background: var(--res-mem, #10b981);
+}
+.res-sparkline-line.disk,
+.conn-sparkline-dot.disk,
+.conn-legend-dot.disk {
+  stroke: var(--res-disk, #f59e0b);
+  background: var(--res-disk, #f59e0b);
+}
 .table-ping {
   width: 105px;
   padding: 0;
@@ -1345,6 +1370,12 @@ footer a:hover {
   overflow: hidden;
   width: 68px;
   background: var(--surface);
+}
+/* 纵轴只留固定的那份:滚动区里的图自带一份纵轴,半透明主题下透过固定纵轴的底色看得见,
+ * 两份刻度叠成「重影」(#973) */
+.chart-fixed-y-axis + .chart-scroll .recharts-yAxis,
+.chart-fixed-y-axis + .chart-scroll .recharts-yAxis-tick-labels {
+  visibility: hidden;
 }
 /* recharts 3.10 把刻度文字挪到了独立的 z-index 图层(不在 .recharts-xAxis 下),要单独藏 */
 .chart-fixed-y-axis .recharts-xAxis,

@@ -133,7 +133,7 @@ export interface ForwardChainGroupData {
   loss_pct?: number;
   servers: ForwardChainServerData[];
 }
-/** 选路段的一条路(主控 #1136):分叉那组到下一组之间并行的几条之一 */
+/** 选路段的一条路:分叉那组到下一组之间并行的几条之一 */
 export interface ForwardChainRoute {
   name: string;
   /** 依次绕经的中转组;空 = 直连下一组 */
@@ -165,15 +165,22 @@ export interface ForwardChainData {
   name: string;
   end_to_end_ms: number;
   loss_pct: number;
-  groups: ForwardChainGroupData[];
-  /** 有选路段时:groups[route_hop] 到下一组之间是 routes 这几条并行的路;老主控不带 */
+  /** 有选路段时:groups[route_hop] 到下一组之间是 routes 这几条并行的路 */
   route_hop?: number;
-  route_policy?: string;
+  route_policy?: "lowest_latency" | "failover" | "weighted" | string;
   failover_ms?: number;
   routes?: ForwardChainRoute[];
+  groups: ForwardChainGroupData[];
   bucket_sec: number;
   trend: ForwardChainBucket[];
   traffic?: ForwardChainTraffic | null;
+  // 以下三项老主控不下发
+  /** 近 24 小时可用率 0..1;这条链没有历史时为 null */
+  availability_24h?: number | null;
+  /** 最近一次采样的抖动(ms);超过 2 分钟没采到为 null */
+  jitter_ms?: number | null;
+  /** 近 24 小时状态条:72 个字符、20 分钟一格,o 正常 / d 降级 / b 中断 / n 无数据 */
+  cells?: string;
 }
 
 export interface TriISPPublicSlot {

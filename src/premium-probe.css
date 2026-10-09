@@ -4629,6 +4629,7 @@
   color: #17130d;
 }
 
+/* ---- 转发链视图:与主控内置探针页对齐(选路段 / 每台丢包 / 可用率状态条) ---- */
 /* 选路段:分叉那组到下一组之间并行的几条路(#1136) */
 .premium-probe-forward .rroutes {
   flex: 0 0 220px;
@@ -4693,4 +4694,111 @@
   border-radius: 4px;
   color: var(--pp-gold-bright);
   background: rgba(216, 180, 106, 0.12);
+}
+
+/* 转发链可用率 + 近 24 小时状态条(20 分钟一格) */
+.premium-probe-forward-avail {
+  --fa-ok: #6bd39a;
+  --fa-warn: #e0a347;
+  --fa-bad: #e0604c;
+  --fa-none: rgba(216, 180, 106, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 18px;
+  background: var(--pp-panel);
+  border: 1px solid var(--pp-border);
+  border-radius: 14px;
+}
+.premium-probe-forward-avail .head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.premium-probe-forward-avail .k {
+  font-size: 12px;
+  color: #9a917d;
+}
+.premium-probe-forward-avail .v {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pp-gold-bright);
+  font-variant-numeric: tabular-nums;
+}
+.premium-probe-forward-avail .v .u {
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9a917d;
+}
+.premium-probe-forward-avail .bar {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+  min-width: 0;
+}
+.premium-probe-forward-avail .bar i {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 2px;
+}
+.premium-probe-forward-avail i.is-o {
+  background: var(--fa-ok);
+}
+.premium-probe-forward-avail i.is-d {
+  background: var(--fa-warn);
+}
+.premium-probe-forward-avail i.is-b {
+  background: var(--fa-bad);
+}
+.premium-probe-forward-avail i.is-n {
+  background: var(--fa-none);
+}
+.premium-probe-forward-avail .axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10.5px;
+  color: #776e60;
+  white-space: nowrap;
+}
+.premium-probe-forward-avail .lg {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 12px;
+}
+.premium-probe-forward-avail .lg span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.premium-probe-forward-avail .lg i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+@media (max-width: 820px) {
+  /* 72 格在手机上每格只有三四个像素,缝收到 1px */
+  .premium-probe-forward-avail .bar {
+    gap: 1px;
+    height: 18px;
+  }
+}
+/* light 主题:亮绿 / 亮橙在奶白底上发飘,压深;灰字同其它转发卡片 */
+:root.light .premium-probe-forward-avail {
+  --fa-ok: #2f9a63;
+  --fa-warn: #c9861b;
+  --fa-bad: #c8432f;
+  --fa-none: rgba(168, 124, 34, 0.16);
+}
+:root.light .premium-probe-forward-avail .k,
+:root.light .premium-probe-forward-avail .v .u,
+:root.light .premium-probe-forward-avail .axis {
+  color: #8a7f64;
 }
