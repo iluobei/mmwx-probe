@@ -18,14 +18,12 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
-  CheckCircle2,
   ChevronDown,
   CircleHelp,
   Clock,
   CloudDownload,
   CloudUpload,
   Cpu,
-  Gauge,
   Globe2,
   HardDrive,
   LayoutGrid,
@@ -37,10 +35,10 @@ import {
   Monitor,
   Network,
   PieChart,
-  Server,
+  Search,
+  TriangleAlert,
   Wallet,
   Wifi,
-  XCircle,
 } from "lucide-react";
 import {
   siAlmalinux,
@@ -106,6 +104,18 @@ import {
   probeRangeOptions,
 } from "./probe-ranges";
 import { ThemeSwitch } from "./ThemeSwitch";
+import {
+  PROBE_SORT_KEYS,
+  averageLoad,
+  formatCapacity,
+  formatSize,
+  probeHealthIssue,
+  relativeTime,
+  sortProbeServers,
+  todayTrafficTotal,
+  type ProbeHealthIssue,
+  type ProbeSortKey,
+} from "./probe-overview";
 import { PasskeyLogin } from "./PasskeyLogin";
 import { Twemoji } from "./Twemoji";
 import { displayServerName } from "./server-name";
@@ -289,30 +299,6 @@ function signedBytes(value: number): string {
 function speed(value = 0): string {
   return `${bytes(value, true, 1000)}/s`;
 }
-function bitSpeed(bytesPerSecond = 0): string {
-  let value = Math.max(0, bytesPerSecond) * 8;
-  const units = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"];
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit++;
-  }
-  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
-  return `${value.toFixed(digits)} ${units[unit]}`;
-}
-function speedScale(bytesPerSecond: number): {
-  percent: number;
-  label: string;
-} {
-  const bps = Math.max(0, bytesPerSecond) * 8;
-  const steps = [1e6, 10e6, 100e6, 1e9, 10e9, 100e9, 1e12];
-  const ceiling =
-    steps.find((value) => bps <= value) || steps[steps.length - 1];
-  return {
-    percent: Math.min(100, (bps / ceiling) * 100),
-    label: bitSpeed(ceiling / 8),
-  };
-}
 const cycleLabel = {
   month: "月",
   quarter: "季",
@@ -381,32 +367,6 @@ function probeCountryCode(server: ProbeServer): string {
     countryCodeFromRegion(server.region)
   );
 }
-function SpeedSummary({
-  label,
-  value,
-  direction,
-}: {
-  label: string;
-  value: number;
-  direction: "up" | "down";
-}) {
-  const scale = speedScale(value);
-  return (
-    <div className={`speed-summary ${direction}`}>
-      <div>
-        <span>
-          {direction === "up" ? <ArrowUp size={19} /> : <ArrowDown size={19} />}
-          {label}
-        </span>
-        <strong>{bitSpeed(value)}</strong>
-      </div>
-      <div className="speed-progress">
-        <i style={{ width: `${scale.percent}%` }} />
-        <small>{scale.label}</small>
-      </div>
-    </div>
-  );
-}
 function pct(used = 0, total = 0): number {
   return total > 0 ? Math.min(100, (used * 100) / total) : 0;
 }
@@ -416,13 +376,20 @@ function Meter({
   label,
   value,
   percent,
+  sub,
+  subRight,
   onClick,
+  title,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   percent: number;
+  /** 进度条下方的小字:CPU 核心数、内存 / 硬盘「已用 / 总量」 */
+  sub?: ReactNode;
+  subRight?: ReactNode;
   onClick?: () => void;
+  title?: string;
 }) {
   const body = (
     <>
@@ -434,19 +401,63 @@ function Meter({
         <strong>{value}</strong>
       </div>
       <div className="meter">
-        <i style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
+        <i
+          className={percent > 90 ? "bad" : percent > 70 ? "warn" : undefined}
+          style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
+        />
       </div>
+      {(sub || subRight) && (
+        <div className="metric-sub">
+          <span>{sub}</span>
+          {subRight && <span>{subRight}</span>}
+        </div>
+      )}
     </>
   );
   // 可点的（CPU / 内存 / 硬盘点开看历史）沿用流量那格的按钮样式。
   return onClick ? (
-    <button type="button" className="metric metric-button" onClick={onClick}>
+    <button
+      type="button"
+      className="metric metric-button"
+      onClick={onClick}
+      title={title}
+    >
       {body}
     </button>
   ) : (
-    <div className="metric">{body}</div>
+    <div className="metric" title={title}>
+      {body}
+    </div>
   );
 }
+
+// 「4 核 · 8 线程」;线程数与核心数相同时只写核心
+function cpuCoresLabel(server: ProbeServer): string | undefined {
+  if (!server.cpu_cores && !server.cpu_threads) return undefined;
+  const cores = server.cpu_cores ? `${server.cpu_cores} 核` : "";
+  const threads =
+    server.cpu_threads && server.cpu_threads !== server.cpu_cores
+      ? `${server.cpu_threads} 线程`
+      : "";
+  return [cores, threads].filter(Boolean).join(" · ") || undefined;
+}
+
+// 离线卡片的规格行:「2 核 · 1 GB 内存 · 20 GB 硬盘」
+function specsLabel(server: ProbeServer): string | undefined {
+  const parts = [
+    server.cpu_cores ? `${server.cpu_cores} 核` : "",
+    server.mem_total ? `${formatSize(server.mem_total)} 内存` : "",
+    server.disk_total ? `${formatSize(server.disk_total)} 硬盘` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : undefined;
+}
+
+const healthLabels: Record<ProbeHealthIssue["key"], string> = {
+  cpu: "CPU",
+  mem: "内存",
+  disk: "硬盘",
+  traffic: "流量",
+};
 
 function TrafficDialog({
   server,
@@ -1698,10 +1709,13 @@ function ServerCard({
   server,
   index,
   triISP,
+  dense = false,
 }: {
   server: ProbeServer;
   index: number;
   triISP?: TriISPPublic;
+  /** 紧凑模式:只留三项占用、计费用量和网速,一屏放更多台 */
+  dense?: boolean;
 }) {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
@@ -1714,22 +1728,115 @@ function ServerCard({
   const trafficUsed = billableTraffic(server);
   const currentBoot = bootTraffic(server);
   const formula = trafficFormulaLabel(server);
-  return (
-    <article className="server-card">
-      <div className="server-title">
-        <span className={server.online ? "status online" : "status"} />
-        <h2>
-          <Twemoji>
-            {displayServerName(name, `服务器 ${index + 1}`, flag)}
-          </Twemoji>
-        </h2>
-        {!!server.unlocks?.length && (
-          <UnlockHoverIcon unlocks={server.unlocks} />
-        )}
-        <span title={systemTitle(server)}>
-          <SystemIcon server={server} />
+  const issue = probeHealthIssue(server, trafficUsed);
+  const hasMetric =
+    server.cpu_pct !== undefined ||
+    (server.mem_total ?? 0) > 0 ||
+    (server.disk_total ?? 0) > 0;
+  const cpuInfo =
+    [
+      server.cpu_model,
+      server.cpu_cores ? `${server.cpu_cores} 核` : "",
+      server.cpu_threads ? `${server.cpu_threads} 线程` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || undefined;
+
+  const meta = (server.expires_at ||
+    server.renewal_price !== undefined ||
+    server.renewal_cycle === "permanent") && (
+    <div className="server-meta">
+      {/* 永久(一次性买断)没有到期日:显示「永久」,不显示倒计时 */}
+      {server.renewal_cycle === "permanent" && !server.expires_at && (
+        <span>
+          <CalendarClock size={13} />
+          永久
         </span>
-      </div>
+      )}
+      {server.expires_at &&
+        (server.provider_url ? (
+          <a
+            href={server.provider_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={expiring(server) || expired(server) ? "warning" : ""}
+            title={
+              server.provider_name
+                ? `前往 ${server.provider_name} 续费`
+                : "前往服务商续费"
+            }
+          >
+            <CalendarClock size={13} />
+            {remainingDays(server.expires_at)}
+          </a>
+        ) : (
+          <span
+            className={expiring(server) || expired(server) ? "warning" : ""}
+          >
+            <CalendarClock size={13} />
+            {remainingDays(server.expires_at)}
+          </span>
+        ))}
+      {server.renewal_price !== undefined && (
+        <span>
+          <Wallet size={13} />
+          {server.renewal_price_cny !== undefined
+            ? `¥${server.renewal_price_cny.toFixed(2)}`
+            : `${server.renewal_currency || "CNY"} ${server.renewal_price}`}{" "}
+          / {cycleLabel[server.renewal_cycle || "month"]}
+          {server.renewal_price_cny !== undefined &&
+            server.renewal_currency !== "CNY" && (
+              <small>
+                （{server.renewal_currency} {server.renewal_price}）
+              </small>
+            )}
+        </span>
+      )}
+    </div>
+  );
+
+  const title = (
+    <div className="server-title">
+      <span className={server.online ? "status online" : "status"} />
+      <h2>
+        <Twemoji>{displayServerName(name, `服务器 ${index + 1}`, flag)}</Twemoji>
+      </h2>
+      {issue ? (
+        <em className="health-badge bad">
+          <TriangleAlert size={11} />
+          {healthLabels[issue.key]} {issue.pct.toFixed(0)}%
+        </em>
+      ) : (
+        server.online &&
+        hasMetric && <em className="health-badge ok">健康</em>
+      )}
+      <i className="server-title-gap" />
+      {!!server.unlocks?.length && <UnlockHoverIcon unlocks={server.unlocks} />}
+      <span title={systemTitle(server)}>
+        <SystemIcon server={server} />
+      </span>
+    </div>
+  );
+
+  // 离线:数据都是旧的,只留规格、最后在线时间和续费信息
+  if (!server.online) {
+    const specs = specsLabel(server);
+    return (
+      <article className="server-card offline">
+        {title}
+        {specs && <div className="server-specs">{specs}</div>}
+        <div className="offline-note">
+          离线
+          {server.last_seen && ` · 最后在线 ${relativeTime(server.last_seen)}`}
+        </div>
+        {meta}
+      </article>
+    );
+  }
+
+  return (
+    <article className="server-card" data-alert={issue ? "true" : undefined}>
+      {title}
       <div className="metrics">
         {server.cpu_pct !== undefined && (
           <Meter
@@ -1737,6 +1844,8 @@ function ServerCard({
             label="CPU"
             value={`${server.cpu_pct.toFixed(1)}%`}
             percent={server.cpu_pct}
+            sub={cpuCoresLabel(server)}
+            title={cpuInfo}
             onClick={() => setResourceFocus("cpu")}
           />
         )}
@@ -1746,6 +1855,11 @@ function ServerCard({
             label="内存"
             value={`${pct(server.mem_used, server.mem_total).toFixed(1)}%`}
             percent={pct(server.mem_used, server.mem_total)}
+            sub={
+              server.mem_total > 0
+                ? formatCapacity(server.mem_used ?? 0, server.mem_total)
+                : undefined
+            }
             onClick={() => setResourceFocus("mem")}
           />
         )}
@@ -1755,6 +1869,11 @@ function ServerCard({
             label="硬盘"
             value={`${pct(server.disk_used, server.disk_total).toFixed(1)}%`}
             percent={pct(server.disk_used, server.disk_total)}
+            sub={
+              server.disk_total > 0
+                ? formatCapacity(server.disk_used ?? 0, server.disk_total)
+                : undefined
+            }
             onClick={() => setResourceFocus("disk")}
           />
         )}
@@ -1784,10 +1903,23 @@ function ServerCard({
             </div>
             <div className="meter">
               <i
+                className={
+                  pct(trafficUsed, server.traffic_limit) > 90 ? "bad" : undefined
+                }
                 style={{
                   width: `${pct(trafficUsed, server.traffic_limit)}%`,
                 }}
               />
+            </div>
+            <div className="metric-sub">
+              <span>
+                {server.traffic_limit
+                  ? `${pct(trafficUsed, server.traffic_limit).toFixed(0)}%`
+                  : "不限量"}
+              </span>
+              {server.period_end && (
+                <span>{server.period_end.slice(5).replace("-", "/")} 重置</span>
+              )}
             </div>
             {trafficBubble.pos &&
               createPortal(
@@ -1837,123 +1969,70 @@ function ServerCard({
           </span>
         </div>
       )}
-      {(currentBoot.uplink !== undefined ||
-        currentBoot.downlink !== undefined) && (
-        <div className="cumulative-traffic">
-          <small>本次开机网卡</small>
-          <span>
-            <CloudDownload size={16} />
-            {bytes(currentBoot.downlink, false)}
-          </span>
-          <span>
-            <CloudUpload size={16} />
-            {bytes(currentBoot.uplink, false)}
-          </span>
-        </div>
-      )}
-      {(server.tcp_connections !== undefined ||
-        server.udp_connections !== undefined) && (
-        <div className="conn-counts">
-          <small title={CONN_COUNT_HINT}>
-            <Network size={14} />
-            系统连接数
-            {server.conn_history && <em>近 1 小时</em>}
-          </small>
-          <span>
-            <b>
-              {server.conn_history && <ConnLegendDot kind="tcp" />}
-              TCP
-            </b>
-            {connCount(server.tcp_connections)}
-          </span>
-          <span>
-            <b>
-              {server.conn_history && <ConnLegendDot kind="udp" />}
-              UDP
-            </b>
-            {connCount(server.udp_connections)}
-          </span>
-          {server.conn_history && (
-            <button
-              type="button"
-              className="conn-sparkline-button"
-              onClick={() => setConnOpen(true)}
-              aria-label="查看连接数历史"
-            >
-              <ConnSparkline history={server.conn_history} />
-            </button>
-          )}
-          {connOpen && (
-            <ConnDialog
-              serverIndex={index}
-              title={name}
-              fallback={server.conn_history}
-              close={() => setConnOpen(false)}
-            />
-          )}
-        </div>
-      )}
-      {!!server.ping?.length && (
+      {!dense &&
+        (currentBoot.uplink !== undefined ||
+          currentBoot.downlink !== undefined) && (
+          <div className="cumulative-traffic">
+            <span>
+              <b>
+                <CloudDownload size={14} />
+                本次开机网卡
+              </b>
+              {bytes(currentBoot.downlink, false)}
+            </span>
+            <span>
+              <CloudUpload size={14} />
+              {bytes(currentBoot.uplink, false)}
+            </span>
+          </div>
+        )}
+      {!dense &&
+        (server.tcp_connections !== undefined ||
+          server.udp_connections !== undefined) && (
+          <div className="conn-counts">
+            <small title={CONN_COUNT_HINT}>
+              <Network size={14} />
+              系统连接数
+              <b>
+                {server.conn_history && <ConnLegendDot kind="tcp" />}
+                TCP <span>{connCount(server.tcp_connections)}</span>
+              </b>
+              <b>
+                {server.conn_history && <ConnLegendDot kind="udp" />}
+                UDP <span>{connCount(server.udp_connections)}</span>
+              </b>
+              {server.conn_history && <em>近 1 小时</em>}
+            </small>
+            {server.conn_history && (
+              <button
+                type="button"
+                className="conn-sparkline-button"
+                onClick={() => setConnOpen(true)}
+                aria-label="查看连接数历史"
+              >
+                <ConnSparkline history={server.conn_history} />
+              </button>
+            )}
+            {connOpen && (
+              <ConnDialog
+                serverIndex={index}
+                title={name}
+                fallback={server.conn_history}
+                close={() => setConnOpen(false)}
+              />
+            )}
+          </div>
+        )}
+      {!dense && !!server.ping?.length && (
         <PingPanel ping={server.ping} serverIndex={index} triISP={triISP} />
       )}
-      {!!server.return_routes?.length && (
+      {!dense && !!server.return_routes?.length && (
         <ReturnRouteBadges
           routes={server.return_routes}
           telecomPaidPeer={server.telecom_paid_peer}
         />
       )}
-      {(server.expires_at ||
-        server.renewal_price !== undefined ||
-        server.renewal_cycle === "permanent") && (
-        <div className="server-meta">
-          {/* 永久(一次性买断)没有到期日:显示「永久」,不显示倒计时 */}
-          {server.renewal_cycle === "permanent" && !server.expires_at && (
-            <span>
-              <CalendarClock size={13} />
-              永久
-            </span>
-          )}
-          {server.expires_at &&
-            (server.provider_url ? (
-              <a
-                href={server.provider_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={expiring(server) || expired(server) ? "warning" : ""}
-                title={
-                  server.provider_name
-                    ? `前往 ${server.provider_name} 续费`
-                    : "前往服务商续费"
-                }
-              >
-                <CalendarClock size={13} />
-                {remainingDays(server.expires_at)}
-              </a>
-            ) : (
-              <span
-                className={expiring(server) || expired(server) ? "warning" : ""}
-              >
-                <CalendarClock size={13} />
-                {remainingDays(server.expires_at)}
-              </span>
-            ))}
-          {server.renewal_price !== undefined && (
-            <span>
-              <Wallet size={13} />
-              {server.renewal_price_cny !== undefined
-                ? `¥${server.renewal_price_cny.toFixed(2)}`
-                : `${server.renewal_currency || "CNY"} ${server.renewal_price}`}{" "}
-              / {cycleLabel[server.renewal_cycle || "month"]}
-              {server.renewal_price_cny !== undefined &&
-                server.renewal_currency !== "CNY" && (
-                  <small>
-                    （{server.renewal_currency} {server.renewal_price}）
-                  </small>
-                )}
-            </span>
-          )}
-        </div>
-      )}
+      {meta}
       {trafficOpen && (
         <TrafficDialog server={server} close={() => setTrafficOpen(false)} />
       )}
@@ -2448,16 +2527,125 @@ function ProbeLicenseNameplate({
   );
 }
 
+type ProbeFilter =
+  | "all"
+  | "online"
+  | "offline"
+  | "expiring"
+  | "expired"
+  | "renewal"
+  | "alert";
+type ProbeGroupBy = "none" | "region";
+type ProbeDensity = "standard" | "dense";
+
+// 工具条的排序 / 分组 / 紧凑选择记在浏览器里;隐私模式等拿不到存储时照常工作
+function readPref<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 忽略
+  }
+}
+
+const sortLabels: Record<ProbeSortKey, string> = {
+  default: "默认顺序",
+  name: "名称",
+  cpu: "CPU",
+  mem: "内存",
+  speed: "网速",
+  traffic: "计费用量",
+  expiry: "到期日",
+  latency: "延迟",
+};
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    setMatches(media.matches);
+    const listener = (e: MediaQueryListEvent) => setMatches(e.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [query]);
+  return matches;
+}
+
+// 顶部指标格:可点击的就是一个筛选入口
+function Kpi({
+  label,
+  value,
+  hint,
+  tone,
+  onClick,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: string;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <span>{label}</span>
+      <strong className={tone}>{value}</strong>
+      {hint && <small>{hint}</small>}
+    </>
+  );
+  return onClick ? (
+    <button type="button" className="kpi" onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <div className="kpi">{body}</div>
+  );
+}
+
 export function App() {
   const { data, error } = useProbe();
   const [view, setView] = useState<"card" | "list">(() =>
     localStorage.getItem("probe-view") === "list" ? "list" : "card",
   );
-  const [filter, setFilter] = useState<
-    "all" | "online" | "offline" | "expiring" | "expired" | "renewal"
-  >("all");
+  const [filter, setFilter] = useState<ProbeFilter>("all");
   const [region, setRegion] = useState("all");
   const [globeOpen, setGlobeOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKeyState] = useState<ProbeSortKey>(() =>
+    readPref("probe-sort", PROBE_SORT_KEYS, "default"),
+  );
+  const [groupBy, setGroupByState] = useState<ProbeGroupBy>(() =>
+    readPref("probe-group", ["none", "region"] as const, "none"),
+  );
+  const [density, setDensityState] = useState<ProbeDensity>(() =>
+    readPref("probe-density", ["standard", "dense"] as const, "standard"),
+  );
+  // 宽屏把地球放在指标右边常驻;窄屏放到下面、保持可折叠
+  const wide = useMediaQuery("(min-width: 1024px)");
+  const setSortKey = (v: ProbeSortKey) => {
+    setSortKeyState(v);
+    writePref("probe-sort", v);
+  };
+  const setGroupBy = (v: ProbeGroupBy) => {
+    setGroupByState(v);
+    writePref("probe-group", v);
+  };
+  const setDensity = (v: ProbeDensity) => {
+    setDensityState(v);
+    writePref("probe-density", v);
+  };
   const setMode = (next: "card" | "list") => {
     setView(next);
     localStorage.setItem("probe-view", next);
@@ -2490,11 +2678,17 @@ export function App() {
   const title = data.title?.trim() || "服务器状态";
   const servers = data.servers || [];
   const onlineCount = servers.filter((server) => server.online).length;
+  const offlineCount = servers.length - onlineCount;
   const expiringCount = servers.filter(expiring).length;
   const expiredCount = servers.filter(expired).length;
-  const renewalCount = servers.filter(
+  const renewalServers = servers.filter(
     (server) => expiring(server) || expired(server),
-  ).length;
+  );
+  const renewalCount = renewalServers.length;
+  const renewalAmount = renewalServers.reduce(
+    (sum, server) => sum + (server.renewal_price_cny ?? 0),
+    0,
+  );
   const regions = [
     ...new Set(
       servers
@@ -2503,7 +2697,7 @@ export function App() {
     ),
   ].sort((a, b) => a.localeCompare(b, "zh-CN"));
   const globeRegions = servers.map(probeCountryCode).filter(Boolean);
-  const selectFilter = (next: typeof filter) => {
+  const selectFilter = (next: ProbeFilter) => {
     setFilter(next);
     setRegion("all");
   };
@@ -2514,20 +2708,67 @@ export function App() {
   const clearFilters = () => {
     setFilter("all");
     setRegion("all");
+    setSearch("");
   };
   const hasExpiry = servers.some((server) => !!server.expires_at);
-  const visible = servers.filter((server) => {
-    const matchesStatus =
-      filter === "all" ||
-      (filter === "online" && server.online) ||
-      (filter === "offline" && !server.online) ||
-      (filter === "expiring" && expiring(server)) ||
-      (filter === "expired" && expired(server)) ||
-      (filter === "renewal" && (expiring(server) || expired(server)));
-    return (
-      matchesStatus && (region === "all" || server.region?.trim() === region)
-    );
-  });
+  const healthOf = (server: ProbeServer) =>
+    probeHealthIssue(server, billableTraffic(server));
+  const alertCount = servers.filter((server) => !!healthOf(server)).length;
+  const hasMetrics = servers.some(
+    (server) =>
+      server.cpu_pct !== undefined ||
+      server.mem_total !== undefined ||
+      server.disk_total !== undefined ||
+      billableTraffic(server) !== undefined,
+  );
+  const keyword = search.trim().toLowerCase();
+  const visible = sortProbeServers(
+    servers
+      .map((server, index) => ({ server, index }))
+      .filter(({ server }) => {
+        const matchesStatus =
+          filter === "all" ||
+          (filter === "online" && server.online) ||
+          (filter === "offline" && !server.online) ||
+          (filter === "expiring" && expiring(server)) ||
+          (filter === "expired" && expired(server)) ||
+          (filter === "renewal" && (expiring(server) || expired(server))) ||
+          (filter === "alert" && !!healthOf(server));
+        const matchesSearch =
+          !keyword ||
+          (server.name || "").toLowerCase().includes(keyword) ||
+          (server.region || "").toLowerCase().includes(keyword);
+        return (
+          matchesStatus &&
+          matchesSearch &&
+          (region === "all" || server.region?.trim() === region)
+        );
+      }),
+    sortKey,
+    (server) => billableTraffic(server as ProbeServer) ?? 0,
+  );
+  // 按地区分组(仅卡片视图):组按地区名排,没设地区的放最后
+  const groups =
+    groupBy === "region"
+      ? [
+          ...visible
+            .reduce((map, item) => {
+              const key = item.server.region?.trim() || "";
+              map.set(key, [...(map.get(key) ?? []), item]);
+              return map;
+            }, new Map<string, typeof visible>())
+            .entries(),
+        ]
+          .sort(([a], [b]) => (!a ? 1 : !b ? -1 : a.localeCompare(b, "zh-CN")))
+          .map(([key, items]) => ({
+            key: key || "__none__",
+            label: key || "未设置地区",
+            flag: regionFlag(
+              items[0]?.server.region_country || items[0]?.server.region,
+            ),
+            items,
+          }))
+      : [{ key: "__all__", label: "", flag: "", items: visible }];
   const hasSpeed = servers.some(
     (server) =>
       server.upload_speed !== undefined || server.download_speed !== undefined,
@@ -2539,6 +2780,92 @@ export function App() {
   const totalDownload = servers.reduce(
     (sum, server) => sum + (server.download_speed || 0),
     0,
+  );
+  const todayTraffic = todayTrafficTotal(servers);
+  const avgLoad = averageLoad(servers);
+  const showGlobe = !!data.show_globe && globeRegions.length > 0;
+  const regionCount = new Set(globeRegions).size;
+  const kpis = [
+    <Kpi
+      key="total"
+      label="总节点"
+      value={servers.length}
+      hint="点击查看全部"
+      onClick={() => selectFilter("all")}
+    />,
+    <Kpi
+      key="online"
+      label="在线"
+      value={onlineCount}
+      tone="online"
+      hint={
+        <>
+          离线 <b className={offlineCount > 0 ? "offline" : ""}>{offlineCount}</b>
+        </>
+      }
+      onClick={() => selectFilter(offlineCount > 0 ? "offline" : "online")}
+    />,
+    hasSpeed && (
+      <Kpi
+        key="speed"
+        label="总下行 / 上行"
+        value={<span className="down">↓ {speed(totalDownload)}</span>}
+        hint={<span className="up">↑ {speed(totalUpload)}</span>}
+      />
+    ),
+    todayTraffic !== undefined && (
+      <Kpi
+        key="today"
+        label="今日流量"
+        value={bytes(todayTraffic, false)}
+        hint="全部服务器合计"
+      />
+    ),
+    (avgLoad.cpu !== undefined ||
+      avgLoad.mem !== undefined ||
+      avgLoad.disk !== undefined) && (
+      <Kpi
+        key="load"
+        label="平均负载"
+        value={
+          avgLoad.cpu !== undefined
+            ? `CPU ${avgLoad.cpu.toFixed(0)}%`
+            : avgLoad.mem !== undefined
+              ? `内存 ${avgLoad.mem.toFixed(0)}%`
+              : `硬盘 ${avgLoad.disk!.toFixed(0)}%`
+        }
+        hint={[
+          avgLoad.cpu !== undefined && avgLoad.mem !== undefined
+            ? `内存 ${avgLoad.mem.toFixed(0)}%`
+            : "",
+          avgLoad.disk !== undefined &&
+          (avgLoad.cpu !== undefined || avgLoad.mem !== undefined)
+            ? `硬盘 ${avgLoad.disk.toFixed(0)}%`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      />
+    ),
+    hasExpiry && (
+      <Kpi
+        key="renewal"
+        label="待续费"
+        value={renewalCount}
+        tone={renewalCount > 0 ? "warn" : undefined}
+        hint={
+          renewalAmount > 0
+            ? `30 天内 · 合计 ¥${renewalAmount.toFixed(2)}`
+            : "30 天内到期"
+        }
+        onClick={() => selectFilter("renewal")}
+      />
+    ),
+  ].filter(Boolean);
+  const globeBody = (
+    <Suspense fallback={<div className="globe-loading">正在加载国界数据…</div>}>
+      <RegionGlobe regions={globeRegions} compact={wide} />
+    </Suspense>
   );
   return (
     <HistoryDaysContext.Provider value={data.history_days ?? 1}>
@@ -2573,99 +2900,63 @@ export function App() {
           </button>
         </nav>
       </header>
-      <section className="dashboard-summary">
-        <article className="summary-card">
-          <header>
-            <span>
-              <Server size={18} />
-              节点情况
-            </span>
-            {hasExpiry && (
-              <button
-                className="expiry-shortcut"
-                onClick={() => selectFilter("renewal")}
-              >
-                <CalendarClock size={14} />
-                待续费 <b>{renewalCount}</b>
-              </button>
+      {servers.length > 0 &&
+        (showGlobe && wide ? (
+          <section className="overview with-globe">
+            <div className="kpi-grid three">{kpis}</div>
+            <article className="globe-mini">
+              <header>
+                <span>
+                  <Globe2 size={16} />
+                  地区分布
+                </span>
+                <small>
+                  {regionCount} 个地区 · {globeRegions.length} 台
+                </small>
+              </header>
+              {globeBody}
+            </article>
+          </section>
+        ) : (
+          <>
+            <section className="overview">
+              <div className={showGlobe ? "kpi-grid three" : "kpi-grid"}>
+                {kpis}
+              </div>
+            </section>
+            {showGlobe && (
+              <section className={`globe-card ${globeOpen ? "open" : ""}`}>
+                <button
+                  className="globe-toggle"
+                  type="button"
+                  aria-expanded={globeOpen}
+                  onClick={() => setGlobeOpen((value) => !value)}
+                >
+                  <span>
+                    <Globe2 size={18} />
+                    地区分布
+                  </span>
+                  <span>
+                    {regionCount} 个地区
+                    <ChevronDown size={17} />
+                  </span>
+                </button>
+                {globeOpen && globeBody}
+              </section>
             )}
-          </header>
-          <div className="node-stats">
-            <button onClick={() => selectFilter("all")}>
-              <strong>{servers.length}</strong>
-              <span>
-                <Server size={14} />
-                总节点
-              </span>
-            </button>
-            <button onClick={() => selectFilter("online")} className="online">
-              <strong>{onlineCount}</strong>
-              <span>
-                <CheckCircle2 size={14} />
-                在线节点
-              </span>
-            </button>
-            <button onClick={() => selectFilter("offline")} className="offline">
-              <strong>{servers.length - onlineCount}</strong>
-              <span>
-                <XCircle size={14} />
-                离线节点
-              </span>
-            </button>
-          </div>
-        </article>
-        {hasSpeed && (
-          <article className="summary-card">
-            <header>
-              <span>
-                <Gauge size={18} />
-                网络情况
-              </span>
-              <small>实时汇总</small>
-            </header>
-            <div className="network-stats">
-              <SpeedSummary
-                label="总下行网速"
-                value={totalDownload}
-                direction="down"
-              />
-              <SpeedSummary
-                label="总上行网速"
-                value={totalUpload}
-                direction="up"
-              />
-            </div>
-          </article>
-        )}
-      </section>
-      {data.show_globe && regions.length > 0 && (
-        <section className={`globe-card ${globeOpen ? "open" : ""}`}>
-          <button
-            className="globe-toggle"
-            type="button"
-            aria-expanded={globeOpen}
-            onClick={() => setGlobeOpen((value) => !value)}
-          >
-            <span>
-              <Globe2 size={18} />
-              地区分布
-            </span>
-            <span>
-              {regions.length} 个地区
-              <ChevronDown size={17} />
-            </span>
-          </button>
-          {globeOpen && (
-            <Suspense
-              fallback={<div className="globe-loading">正在加载国界数据…</div>}
-            >
-              <RegionGlobe regions={globeRegions} />
-            </Suspense>
-          )}
-        </section>
-      )}
+          </>
+        ))}
       <section className="probe-toolbar">
         <div className="filters">
+          <label className="probe-search">
+            <Search size={14} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="搜索服务器名称…"
+              aria-label="搜索服务器"
+            />
+          </label>
           <button
             className={filter === "all" ? "active" : ""}
             onClick={() => selectFilter("all")}
@@ -2682,8 +2973,17 @@ export function App() {
             className={filter === "offline" ? "active" : ""}
             onClick={() => selectFilter("offline")}
           >
-            离线 {servers.length - onlineCount}
+            离线 {offlineCount}
           </button>
+          {hasMetrics && (
+            <button
+              className={filter === "alert" ? "active danger" : "danger"}
+              title="CPU、内存、硬盘或计费用量超过 90%"
+              onClick={() => selectFilter("alert")}
+            >
+              <TriangleAlert size={13} /> 告警 {alertCount}
+            </button>
+          )}
           {hasExpiry && (
             <>
               <button
@@ -2706,38 +3006,115 @@ export function App() {
               </button>
             </>
           )}
-          {regions.length > 0 && (
+          <div className="toolbar-end">
+            {regions.length > 0 && (
+              <label className="region-filter">
+                <MapPin size={14} />
+                <select
+                  aria-label="地区筛选"
+                  value={region}
+                  onChange={(event) => selectRegion(event.target.value)}
+                >
+                  <option value="all">全部地区</option>
+                  {regions.map((item) => (
+                    <option value={item} key={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="region-filter">
-              <MapPin size={14} />
+              排序
               <select
-                aria-label="地区筛选"
-                value={region}
-                onChange={(event) => selectRegion(event.target.value)}
+                aria-label="排序"
+                value={sortKey}
+                onChange={(event) =>
+                  setSortKey(event.target.value as ProbeSortKey)
+                }
               >
-                <option value="all">全部地区</option>
-                {regions.map((item) => (
-                  <option value={item} key={item}>
-                    {item}
+                {PROBE_SORT_KEYS.map((key) => (
+                  <option value={key} key={key}>
+                    {sortLabels[key]}
                   </option>
                 ))}
               </select>
             </label>
-          )}
+            {view === "card" && (
+              <>
+                {regions.length > 0 && (
+                  <label className="region-filter">
+                    分组
+                    <select
+                      aria-label="分组"
+                      value={groupBy}
+                      onChange={(event) =>
+                        setGroupBy(event.target.value as ProbeGroupBy)
+                      }
+                    >
+                      <option value="none">不分组</option>
+                      <option value="region">按地区</option>
+                    </select>
+                  </label>
+                )}
+                <span className="density-toggle">
+                  <button
+                    className={density === "standard" ? "active" : ""}
+                    onClick={() => setDensity("standard")}
+                  >
+                    标准
+                  </button>
+                  <button
+                    className={density === "dense" ? "active" : ""}
+                    onClick={() => setDensity("dense")}
+                  >
+                    紧凑
+                  </button>
+                </span>
+              </>
+            )}
+          </div>
         </div>
       </section>
-      <main key={view} className={`servers ${view}`}>
+      <main
+        key={view}
+        className={`servers ${view}${view === "card" ? " grouped" : ""}`}
+      >
         {visible.length ? (
           view === "card" ? (
-            visible.map((server) => (
-              <ServerCard
-                key={server.name}
-                server={server}
-                index={servers.indexOf(server)}
-                triISP={data?.tri_isp}
-              />
+            groups.map((group) => (
+              <section key={group.key} className="server-group">
+                {groupBy === "region" && (
+                  <h2 className="group-heading">
+                    <Twemoji>
+                      {group.flag ? `${group.flag} ${group.label}` : group.label}
+                    </Twemoji>
+                    <small>{group.items.length} 台</small>
+                  </h2>
+                )}
+                <div
+                  className={[
+                    "server-grid",
+                    density === "dense" ? "dense" : "",
+                    groupBy === "region" ? "fill" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {group.items.map(({ server, index }) => (
+                    <ServerCard
+                      key={server.name || index}
+                      server={server}
+                      index={index}
+                      triISP={data?.tri_isp}
+                      dense={density === "dense"}
+                    />
+                  ))}
+                </div>
+              </section>
             ))
           ) : (
-            <ServerTable servers={visible} />
+            <ServerTable servers={visible.map(({ server }) => server)} />
           )
         ) : (
           <div className="empty">

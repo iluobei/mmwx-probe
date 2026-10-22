@@ -7,6 +7,7 @@ import world from 'world-atlas/countries-110m.json'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import type { GeometryCollection, Topology } from 'topojson-specification'
 import { arcPath, arcPointAt, pickArcPairs, sampleArc } from './globe-arcs'
+import { flagTwemojiFile, layoutGlobeLabels, type GlobeLabelMetrics } from './globe-labels'
 
 function countryCode(region: string): string {
   const points = [...region.trim()].map(char => char.codePointAt(0) || 0)
@@ -67,7 +68,39 @@ function RegionArcs({ arcs, projection }: { arcs: RegionArc[]; projection: GeoPr
   </g>
 }
 
-export function RegionGlobe({ regions }: { regions: string[] }) {
+// 亮点旁的小标签:旗帜 + 服务器数量。尺寸按屏幕像素定(约 9px 字),再换算成 SVG 单位;
+// 摆放与避让见 globe-labels(与主仓内置探针同一份逻辑)。
+function RegionLabels({ locations, projection, rotation, unitsPerPx }: {
+  locations: Array<{ code: string; count: number; coordinates: [number, number] }>
+  projection: GeoProjection
+  rotation: [number, number]
+  unitsPerPx: number
+}) {
+  const u = unitsPerPx
+  const list = useMemo(() => {
+    const center: [number, number] = [-rotation[0], -rotation[1]]
+    const points = locations
+      // 转到背面的地区不放标签
+      .filter(l => geoDistance(l.coordinates, center) < Math.PI / 2 - 0.03)
+      .map(l => { const [x, y] = projection(l.coordinates) || [NaN, NaN]; return { code: l.code, count: l.count, x, y } })
+      .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+    const metrics: GlobeLabelMetrics = { height: 14 * u, flag: 11 * u, digit: 5.6 * u, padding: 3.5 * u, gap: 2.5 * u, offset: 6 * u, dotRadius: 5 * u }
+    const [cx, cy] = projection.translate()
+    return layoutGlobeLabels(points, metrics, { cx, cy, r: projection.scale() })
+  }, [locations, projection, rotation, u])
+  return <g className="region-labels">{list.map(label => {
+    const file = flagTwemojiFile(label.code)
+    return <g key={label.code}>
+      {label.leader && <line className="region-label-leader" x1={label.leader.x1} y1={label.leader.y1} x2={label.leader.x2} y2={label.leader.y2} />}
+      <rect className="region-label" x={label.x} y={label.y} width={label.width} height={label.height} rx={label.height / 2} />
+      {file && <image href={`/twemoji/svg/${file}.svg`} x={label.x + 3.5 * u} y={label.y + (label.height - 11 * u) / 2} width={11 * u} height={11 * u} />}
+      <text className="region-label-text" x={label.x + label.width - 3.5 * u} y={label.y + label.height / 2} fontSize={9.5 * u} textAnchor="end" dominantBaseline="central">{label.count}</text>
+    </g>
+  })}</g>
+}
+
+/** compact:放在指标旁的小地球,裁掉两侧给弧线留的空白,底部说明文字也省掉 */
+export function RegionGlobe({ regions, compact = false }: { regions: string[]; compact?: boolean }) {
   const [rotation, setRotation] = useState<[number, number]>(DEFAULT_ROTATION)
   const drag = useRef<{ x: number; y: number; rotation: [number, number] } | undefined>(undefined)
   // 地区集合不变时保持 key 稳定；节点地区变化时同步刷新地图高亮。
@@ -101,8 +134,27 @@ export function RegionGlobe({ regions }: { regions: string[] }) {
     // 错开各条弧上光点的出发时刻;不用随机数,重绘后节奏不跳
     phase: (index * .382) % 1,
   })), [locations])
-  return <div className="globe-stage">
-    <svg className="region-globe" viewBox="0 -40 640 460" role="img" aria-label="服务器地区地球分布"
+  // SVG 单位与屏幕像素的比例,标签在任何尺寸下都是约 9px 的小字。
+  // 地球被 max-height 限高时按 viewBox 等比缩小,宽高都要算
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const viewWidth = compact ? 400 : 640
+  const viewHeight = compact ? 400 : 460
+  const [unitsPerPx, setUnitsPerPx] = useState(1)
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const update = () => {
+      const { width, height } = el.getBoundingClientRect()
+      const scale = Math.min(width / viewWidth, height / viewHeight)
+      if (scale > 0) setUnitsPerPx(1 / scale)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [viewWidth, viewHeight])
+  return <div className={compact ? 'globe-stage compact' : 'globe-stage'}>
+    <svg ref={svgRef} className="region-globe" viewBox={compact ? '120 -12 400 400' : '0 -40 640 460'} role="img" aria-label="服务器地区地球分布"
       onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, rotation } }}
       onPointerMove={event => { if (!drag.current) return; const dx = event.clientX - drag.current.x; const dy = event.clientY - drag.current.y; setRotation([drag.current.rotation[0] + dx * .35, Math.max(-75, Math.min(75, drag.current.rotation[1] - dy * .35))]) }}
       onPointerUp={() => { drag.current = undefined }} onPointerCancel={() => { drag.current = undefined }}>
@@ -119,7 +171,8 @@ export function RegionGlobe({ regions }: { regions: string[] }) {
       <RegionArcs arcs={arcs} projection={projection} />
       <g className="globe-points">{locations.map(location => <g key={location.code} className="laser-origin"><path className="region-point-halo" d={haloPath({ type: 'Point', coordinates: location.coordinates }) || ''} /><path className="region-point" d={pointPath({ type: 'Point', coordinates: location.coordinates }) || ''}><title>{location.code} · {location.count} 台服务器</title></path></g>)}</g>
       <path className="globe-outline" d={path({ type: 'Sphere' }) || ''} />
+      <RegionLabels locations={locations} projection={projection} rotation={rotation} unitsPerPx={unitsPerPx} />
     </svg>
-    <p>拖动地球查看地区 · 已点亮 {activeRegions.size} 个国家或地区</p>
+    {!compact && <p>拖动地球查看地区 · 已点亮 {activeRegions.size} 个国家或地区</p>}
   </div>
 }

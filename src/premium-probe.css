@@ -4416,6 +4416,10 @@
 }
 
 :root.light .premium-probe-heatmap span,
+:root.light .premium-probe-quota-rank span,
+:root.light .premium-probe-billing-rank > div:not(.is-head) > span,
+:root.light .premium-probe-renewals span,
+:root.light .premium-probe-renewal-track span,
 :root.light .premium-probe-command-nodes span,
 :root.light .premium-probe-network-history time,
 :root.light .premium-probe-server-footer small,
