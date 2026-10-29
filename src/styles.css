@@ -187,11 +187,12 @@ button {
   width: min(1600px, calc(100% - 48px));
   margin: 18px auto 0;
 }
-/* 顶部指标:开了地球时左边 3×2、地球常驻右侧;没开时一排铺满 */
+/* 顶部指标:一张卡,有几格铺几格(每格至少 190px);开了地球时右侧常驻 260px 地球卡,高度跟指标走 */
 .overview.with-globe {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 12px;
+  align-items: stretch;
 }
 .kpi-grid {
   display: grid;
@@ -201,6 +202,40 @@ button {
 .kpi-grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: 1fr;
+}
+.kpi-grid.six {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.kpi-grid.six > .kpi {
+  border: 0;
+  border-radius: 0;
+  box-shadow: 1px 1px 0 0 var(--border);
+  background: transparent;
+}
+@media (max-width: 639px) {
+  /* 手机两列格只有一百多像素,网速两个数放不下:独占一行,其它格子补位 */
+  .kpi-grid.six {
+    grid-auto-flow: row dense;
+  }
+  .kpi-grid.six > .kpi.speed-cell,
+  .kpi-grid.six:has(> .speed-cell) > :last-child:nth-child(even),
+  .kpi-grid.six:not(:has(> .speed-cell))
+    > :last-child:nth-child(odd):not(:first-child) {
+    grid-column: span 2;
+  }
+  .overview.with-globe {
+    display: flex;
+    flex-direction: column;
+  }
+  .kpi-grid.six {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .kpi,
 .globe-mini,
@@ -259,29 +294,16 @@ button.kpi:hover {
   color: #d97706;
 }
 .globe-mini {
-  overflow: hidden;
-}
-.globe-mini > header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 16px 0;
-  font-size: 14px;
-  font-weight: 600;
+  justify-content: center;
+  overflow: hidden;
+  padding: 8px;
 }
-.globe-mini > header span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.globe-mini > header svg {
-  color: var(--primary);
-}
-.globe-mini > header small {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
+.globe-mini-stage {
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
 }
 .probe-toolbar {
   padding: 12px;
@@ -368,6 +390,39 @@ button.kpi:hover {
   color: #fff !important;
   background: #dc2626;
   border-color: #dc2626;
+}
+/* 状态筛选:一组分段按钮,选中项白底浮起;计数按含义上色 */
+.filter-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-radius: 9px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+}
+.filters .filter-seg > button {
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.filters .filter-seg > button[aria-pressed="true"] {
+  color: inherit;
+  background: var(--surface);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.filter-seg > button > em {
+  font-size: 12px;
+  font-style: normal;
+}
+.filter-seg > button > em.warning,
+.filter-seg > button > em.danger {
+  font-weight: 600;
 }
 .server-card {
   position: relative;
@@ -590,27 +645,48 @@ button.kpi:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.speed {
+.net-boxes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin: 0 16px;
   padding: 8px 0;
   border-top: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.speed span {
+.net-box {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-weight: 600;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: inherit;
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  font: inherit;
+  text-align: left;
 }
-.speed .download {
+button.net-box:not(:disabled) {
+  cursor: pointer;
+}
+button.net-box:not(:disabled):hover {
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+}
+.net-box > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.net-box > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.net-box .download {
   color: #16a34a;
 }
-.speed .upload {
+.net-box .upload {
   color: #ea580c;
 }
 .server-meta {
@@ -652,54 +728,56 @@ button.kpi:hover {
   font-size: 11px;
   font-weight: 400;
 }
-.ping-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  column-gap: 20px;
-  row-gap: 4px;
+.ping-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0 16px;
   padding: 8px 0 10px;
   border-top: 1px solid var(--border);
 }
-.ping-head {
+.ping-row {
   display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 7px;
+  flex-direction: column;
+  gap: 4px;
 }
-.ping-head > span {
+.ping-row-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ping-row-head > span {
   display: flex;
   min-width: 0;
+  flex: 1;
   align-items: center;
   gap: 5px;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
-}
-.ping-head select {
-  width: 92px;
-  max-width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 4px;
-  color: var(--muted);
-  background: transparent;
-  font-size: 12px;
-  line-height: 1.25;
   text-overflow: ellipsis;
-}
-.ping-head strong {
-  flex-shrink: 0;
-  color: #172033;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.25;
   white-space: nowrap;
 }
-.ping-head strong.warning {
+.ping-row-head > strong {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ping-row-head > em {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-style: normal;
+  white-space: nowrap;
+}
+.ping-row-head > em.warning {
   color: #d97706;
+}
+.ping-row-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 .ping-blocks {
   display: flex;
@@ -1003,65 +1081,6 @@ button.kpi:hover {
 }
 /* 本次开机网卡 / 系统连接数：与内置探针卡片同一排布 —— 左右留出与网速行相同的 17px，
    图标或名称在左、数值靠右。开机网卡紧跟网速行（同一块，不另起分隔线），连接数单独一块。 */
-.cumulative-traffic,
-.conn-counts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px 20px;
-  margin: 0 16px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.speed + .cumulative-traffic {
-  margin-top: -6px;
-  padding-top: 0;
-  border-top: 0;
-  font-size: 11px;
-}
-.cumulative-traffic b {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: inherit;
-}
-.cumulative-traffic small,
-.conn-counts small {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-}
-.conn-counts small {
-  gap: 10px;
-  font-size: 11px;
-}
-.conn-counts small > svg {
-  margin-right: -6px;
-}
-.conn-counts small b span {
-  font-weight: 600;
-}
-.conn-counts small em {
-  margin-left: auto;
-  font-style: normal;
-}
-.cumulative-traffic > span,
-.conn-counts > span {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.conn-counts b {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: inherit;
-}
 /* 连接数小折线图（探针配置开了才有数据），点开看更长的历史。颜色可由主题覆盖 --conn-tcp / --conn-udp。 */
 .conn-sparkline-button {
   display: block;
@@ -2301,4 +2320,215 @@ footer a:hover {
 }
 :root.dark .unlock-badge-letter {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* 顶部汇总格(与内置探针 ProbeStat 同一套):三行定高 68px —— 标题 / 大数字 / 一行小字,
+ * 各格等高、底部不留空;小图要么在第三行与小字同排(chart),要么在右侧独占 96px 一栏(aside) */
+.kpi.stat {
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 10px 14px;
+}
+.stat-text {
+  display: flex;
+  min-height: 68px;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+}
+.stat-with-aside {
+  display: grid;
+  min-height: 68px;
+  /* 文字栏只占它需要的宽(最多 70%),剩下全给右栏小图:宽屏格子很宽时图跟着变宽,小字也不被截断 */
+  grid-template-columns: minmax(0, max-content) minmax(96px, 1fr);
+  gap: 10px;
+}
+.expiry-list {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.expiry-list > span {
+  display: flex;
+  gap: 8px;
+}
+.expiry-list > span > span:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expiry-list .soon {
+  color: #d97706;
+}
+.expiry-list .gone {
+  color: #dc2626;
+}
+.stat-aside {
+  position: relative;
+  min-height: 68px;
+}
+.stat-aside-fill {
+  position: absolute;
+  inset: 0;
+}
+.stat-aside-fill .mini-area {
+  height: 100%;
+}
+.stat-aside-bottom {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+.stat-aside-cols {
+  position: absolute;
+  inset: 0;
+  display: grid;
+}
+.stat-aside-cols > span {
+  cursor: crosshair;
+}
+.stat-aside-cols > span.hot {
+  border-left: 1px solid color-mix(in srgb, var(--muted) 60%, transparent);
+}
+@media (max-width: 639px) {
+  /* 手机两列格太窄,小图会压到数字上:只留文字 */
+  .stat-with-aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stat-aside {
+    display: none;
+  }
+}
+.stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stat-label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-value {
+  display: block;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-dim {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+.stat-speed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 17px;
+}
+.stat-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+}
+/* 一行到底:放不下时由 FitText 缩字号,不折行、不截断 */
+.fit-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.fit-text.stat-sub-fit {
+  flex: 1;
+}
+/* 最小字号都放不下时藏掉说明字,只留数值 */
+.fit-text[data-overflow] > .fit-drop {
+  display: none;
+}
+.fit-text.stat-speed {
+  display: block;
+}
+/* 实时网速:文字优先,小图至少留 64px */
+.stat-with-aside.fit-sub {
+  grid-template-columns: minmax(0, max-content) minmax(64px, 1fr);
+}
+.stat-sub {
+  display: flex;
+  min-height: 16px;
+  min-width: 0;
+  overflow: hidden;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sub-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-inline-charts {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap; /* 格子窄时(手机两列、宽屏多列)额度条 + 用量 + 延迟条 + 丢包放不下一行就折行,不许溢出到隔壁格 */
+  align-items: center;
+  gap: 4px 8px;
+  white-space: nowrap;
+}
+.stat-inline-charts .seg-bar.grow {
+  min-width: 40px;
+  flex: 1;
+}
+.stat-inline-charts .seg-wrap {
+  width: 48px;
+  flex-shrink: 0;
+}
+.mini-area {
+  display: block;
+  width: 100%;
+}
+.mini-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+.mini-bars > i {
+  min-height: 2px;
+  flex: 1;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.mini-bars > i.today {
+  background: var(--primary);
+}
+.seg-bar {
+  display: flex;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+.seg-bar > i {
+  display: block;
+  height: 100%;
 }

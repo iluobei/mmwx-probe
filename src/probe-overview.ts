@@ -14,8 +14,17 @@ export type ProbeOverviewServer = {
   traffic_limit?: number;
   expires_at?: string;
   renewal_price_cny?: number;
-  daily_traffic?: Array<{ date: string; total: number }>;
-  ping?: Array<{ current_ms: number }>;
+  renewal_cycle?: string;
+  tcp_connections?: number;
+  udp_connections?: number;
+  conn_history?: { tcp: (number | null)[]; udp: (number | null)[] };
+  daily_traffic?: Array<{
+    date: string;
+    total: number;
+    uplink?: number;
+    downlink?: number;
+  }>;
+  ping?: Array<{ current_ms: number; loss_pct?: number }>;
 };
 
 /** 进度条变红的阈值,告警也按它 */
@@ -206,4 +215,218 @@ export function relativeTime(iso: string, now = Date.now(), zh = true): string {
   if (min < 60) return `${min} min ago`;
   if (hour < 48) return `${hour} h ago`;
   return `${day} d ago`;
+}
+
+// ---- 顶部汇总卡片(与主仓 src/lib/probe-overview.ts 同一份逻辑) ----
+
+export type ProbeDailyPoint = {
+  date: string;
+  up: number;
+  down: number;
+  total: number;
+};
+
+/** 所有服务器每日流量按日期合计,取最近 days 天(按日期升序)。没有任何日流量 → [] */
+export function dailyTrafficSeries(
+  servers: ProbeOverviewServer[],
+  days = 14,
+): ProbeDailyPoint[] {
+  const byDate = new Map<string, ProbeDailyPoint>();
+  for (const s of servers)
+    for (const d of s.daily_traffic ?? []) {
+      const p = byDate.get(d.date) ?? {
+        date: d.date,
+        up: 0,
+        down: 0,
+        total: 0,
+      };
+      p.up += d.uplink || 0;
+      p.down += d.downlink || 0;
+      p.total += d.total || 0;
+      byDate.set(d.date, p);
+    }
+  return [...byDate.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-days);
+}
+
+/** 在线服务器的连接数合计。没有任何一台上报连接数 → undefined */
+export function connectionTotals(servers: ProbeOverviewServer[]) {
+  const online = servers.filter(
+    (s) =>
+      s.online &&
+      (typeof s.tcp_connections === "number" ||
+        typeof s.udp_connections === "number"),
+  );
+  if (!online.length) return undefined;
+  const tcp = online.reduce((a, s) => a + (s.tcp_connections || 0), 0);
+  const udp = online.reduce((a, s) => a + (s.udp_connections || 0), 0);
+  return { tcp, udp, total: tcp + udp };
+}
+
+/** 设了限额的服务器本期用量合计;used 由调用方按计费口径给。一台都没设限额 → undefined */
+export function quotaSummary(
+  servers: ProbeOverviewServer[],
+  used: (s: ProbeOverviewServer) => number | undefined,
+  warnPct = 80,
+) {
+  const limited = servers.filter((s) => (s.traffic_limit ?? 0) > 0);
+  if (!limited.length) return undefined;
+  let totalUsed = 0;
+  let totalLimit = 0;
+  let warn = 0;
+  for (const s of limited) {
+    const u = used(s) ?? 0;
+    totalUsed += u;
+    totalLimit += s.traffic_limit!;
+    if ((u / s.traffic_limit!) * 100 >= warnPct) warn++;
+  }
+  return {
+    used: totalUsed,
+    limit: totalLimit,
+    pct: (totalUsed / totalLimit) * 100,
+    servers: limited.length,
+    warn,
+  };
+}
+
+export const PROBE_LATENCY_GOOD_MS = 100;
+export const PROBE_LATENCY_FAIR_MS = 200;
+
+/**
+ * 在线服务器的网络质量:每台取各探测目标当前延迟的平均(失败的不计),
+ * 再按 <100 / <200 / 其余(含全部超时)分三档;丢包取所有目标的平均。没有任何探测 → undefined
+ */
+export function latencySummary(servers: ProbeOverviewServer[]) {
+  const per = servers
+    .filter((s) => s.online && (s.ping?.length ?? 0) > 0)
+    .map((s) => {
+      const ok = s
+        .ping!.filter((p) => p.current_ms >= 0)
+        .map((p) => p.current_ms);
+      const loss = s.ping!.map((p) => p.loss_pct ?? 0);
+      return {
+        ms: ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : undefined,
+        loss: loss.reduce((a, b) => a + b, 0) / loss.length,
+      };
+    });
+  if (!per.length) return undefined;
+  const ok = per.filter((p) => p.ms !== undefined).map((p) => p.ms!);
+  return {
+    avgMs: ok.length
+      ? Math.round(ok.reduce((a, b) => a + b, 0) / ok.length)
+      : undefined,
+    avgLoss: per.reduce((a, p) => a + p.loss, 0) / per.length,
+    good: per.filter((p) => p.ms !== undefined && p.ms < PROBE_LATENCY_GOOD_MS)
+      .length,
+    fair: per.filter(
+      (p) =>
+        p.ms !== undefined &&
+        p.ms >= PROBE_LATENCY_GOOD_MS &&
+        p.ms < PROBE_LATENCY_FAIR_MS,
+    ).length,
+    poor: per.filter((p) => p.ms === undefined || p.ms >= PROBE_LATENCY_FAIR_MS)
+      .length,
+  };
+}
+
+const CYCLE_MONTHS: Record<string, number> = {
+  month: 1,
+  quarter: 3,
+  half_year: 6,
+  year: 12,
+  two_year: 24,
+  three_year: 36,
+  five_year: 60,
+};
+
+/** 按续费周期折算的月均成本(人民币);永久 / 没填价格或周期的不计。一台都没有 → undefined */
+export function monthlyCost(servers: ProbeOverviewServer[]) {
+  let total = 0;
+  let any = false;
+  for (const s of servers) {
+    const months = CYCLE_MONTHS[s.renewal_cycle ?? ""];
+    if (!months || typeof s.renewal_price_cny !== "number") continue;
+    total += s.renewal_price_cny / months;
+    any = true;
+  }
+  return any ? total : undefined;
+}
+
+/** 最近要到期的一台(含已到期的,天数为负)。没有任何到期日 → undefined */
+export function nextExpiry(servers: ProbeOverviewServer[], now = Date.now()) {
+  let best: { name: string; days: number } | undefined;
+  for (const s of servers) {
+    if (!s.expires_at) continue;
+    const days = Math.ceil(
+      (new Date(`${s.expires_at}T23:59:59`).getTime() - now) / 86400000,
+    );
+    if (!best || days < best.days) best = { name: s.name ?? "", days };
+  }
+  return best;
+}
+
+/**
+ * 汇总格排几列。auto-fit 会按宽度塞满第一行、剩下的格子在第二行留一大块空白(6 格在 2000px
+ * 宽屏上排成 5 + 2 就很难看);改成按「至少 minCell 宽」算出一行最多放几格,放不下时按行数
+ * 均分,让各行格数一样(6 格 → 3 + 3、4 格 → 2 + 2)。宽度没量到时按 3 列。手机(<640)固定两列。
+ */
+export function kpiColumns(
+  count: number,
+  width: number,
+  minCell = 320,
+): number {
+  if (count <= 1) return 1;
+  if (width <= 0) return Math.min(count, 3);
+  if (width < 640) return 2;
+  const max = Math.max(2, Math.floor(width / minCell));
+  if (max >= count) return count;
+  const rows = Math.ceil(count / max);
+  return Math.ceil(count / rows);
+}
+
+/**
+ * 全部服务器连接数历史按时间点求和(汇总格右栏小图用)。各台的采样条数可能不同,按「最近」对齐
+ * (从末尾往前数),没数据的点当 0;一台都没有历史就返回 undefined。
+ */
+export function connHistoryTotals(servers: ProbeOverviewServer[]) {
+  let len = 0;
+  for (const s of servers)
+    len = Math.max(
+      len,
+      s.conn_history?.tcp.length ?? 0,
+      s.conn_history?.udp.length ?? 0,
+    );
+  if (!len) return undefined;
+  const tcp = new Array<number>(len).fill(0);
+  const udp = new Array<number>(len).fill(0);
+  for (const s of servers) {
+    const h = s.conn_history;
+    if (!h) continue;
+    const add = (src: (number | null)[], dst: number[]) => {
+      const off = len - src.length;
+      src.forEach((v, i) => {
+        if (v !== null && v !== undefined) dst[off + i] += v;
+      });
+    };
+    add(h.tcp, tcp);
+    add(h.udp, udp);
+  }
+  return { tcp, udp };
+}
+
+/** 最近到期的几台(含已过期,天数为负),按剩余天数升序。 */
+export function upcomingExpiries(
+  servers: ProbeOverviewServer[],
+  now = Date.now(),
+  limit = 3,
+) {
+  const list: { name: string; days: number }[] = [];
+  for (const s of servers) {
+    if (!s.expires_at) continue;
+    const end = new Date(`${s.expires_at}T23:59:59`).getTime();
+    if (Number.isNaN(end)) continue;
+    list.push({ name: s.name || "", days: Math.floor((end - now) / 86400000) });
+  }
+  return list.sort((a, b) => a.days - b.days).slice(0, limit);
 }

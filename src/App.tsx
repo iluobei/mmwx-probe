@@ -6,25 +6,28 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useCallback,
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import Lottie from "lottie-react";
 import {
   Activity,
+  BarChart3,
+  Gauge,
+  Server,
   ArrowDown,
   ArrowUp,
   CalendarClock,
-  ChevronDown,
   CircleHelp,
   Clock,
   CloudDownload,
   CloudUpload,
   Cpu,
-  Globe2,
   HardDrive,
   LayoutGrid,
   List,
@@ -90,7 +93,6 @@ import type {
   TriISPPublic,
 } from "./types";
 import { useProbe } from "./use-probe";
-import { ConnLegendDot, ConnSparkline } from "./ConnSparkline";
 import { connHistoryFromSeries, type ProbeMetricPoint } from "./conn-sparkline";
 import {
   resourceHistoryFromSeries,
@@ -106,7 +108,6 @@ import {
 import { ThemeSwitch } from "./ThemeSwitch";
 import {
   PROBE_SORT_KEYS,
-  averageLoad,
   formatCapacity,
   formatSize,
   probeHealthIssue,
@@ -115,6 +116,15 @@ import {
   todayTrafficTotal,
   type ProbeHealthIssue,
   type ProbeSortKey,
+  connectionTotals,
+  dailyTrafficSeries,
+  latencySummary,
+  monthlyCost,
+  nextExpiry,
+  quotaSummary,
+  kpiColumns,
+  connHistoryTotals,
+  upcomingExpiries,
 } from "./probe-overview";
 import { PasskeyLogin } from "./PasskeyLogin";
 import { Twemoji } from "./Twemoji";
@@ -986,10 +996,13 @@ function ConnDialog({
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    void fetch(`/api/series?server=${serverIndex}&metric=system&range=${range}`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
+    void fetch(
+      `/api/series?server=${serverIndex}&metric=system&range=${range}`,
+      {
+        cache: "no-store",
+        signal: controller.signal,
+      },
+    )
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<
@@ -1330,122 +1343,84 @@ function PingPanel({
   // 三网行按 key 从本机实测序列里取 —— 与主控同一套 triISPRows,
   // 两处画的是同一份数据,匹配规则不一致会让同一台机器在内外探针上显示不同。
   const triRows = triISPRows(triISP, ping);
+  // 一个探测点一组:第一行「名称 · 延迟 · 丢包」,第二行左延迟条、右丢包条(与内置探针同形)。
+  const row = (
+    key: string,
+    label: ReactNode,
+    cur: ProbePingSeries | undefined,
+    pick: (kind: "latency" | "loss") => void,
+  ) => (
+    <div key={key} className="ping-row">
+      <div className="ping-row-head">
+        <span>{label}</span>
+        <strong>
+          {!cur
+            ? "—"
+            : cur.current_ms < 0
+              ? "超时"
+              : `${cur.current_ms.toFixed(0)} ms`}
+        </strong>
+        <em className={cur && cur.loss_pct > 0 ? "warning" : undefined}>
+          丢包 {!cur ? "—" : `${cur.loss_pct.toFixed(1)}%`}
+        </em>
+      </div>
+      <div className="ping-row-bars">
+        <button
+          className="ping-blocks"
+          type="button"
+          aria-label="延迟趋势"
+          disabled={!cur}
+          onClick={() => cur && pick("latency")}
+        >
+          {blocksOf(cur?.buckets ?? [], "latency")}
+        </button>
+        <button
+          className="ping-blocks"
+          type="button"
+          aria-label="丢包率趋势"
+          disabled={!cur}
+          onClick={() => cur && pick("loss")}
+        >
+          {blocksOf(cur?.buckets ?? [], "loss")}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {triRows.length > 0 ? (
-        <div className="ping-grid">
-          {/* 三网模式:延迟与丢包按电信/联通/移动分三行,沿用同一套两列网格 ——
-              两侧表头落在同一 grid 行里才会等高。匹配不到的槽位照样成行画「—」:
-              直接跳过会让三行变两行,而「移动没数据」本身就是要给人看的信息。 */}
-          {triRows.map((row) => (
-            <Fragment key={row.isp}>
-              <div className="ping-head">
-                <span>{row.label}</span>
-                <strong>
-                  {!row.series
-                    ? "—"
-                    : row.series.current_ms < 0
-                      ? "超时"
-                      : `${row.series.current_ms.toFixed(0)} ms`}
-                </strong>
-              </div>
-              <div className="ping-head">
-                <span>丢包率</span>
-                <strong
-                  className={
-                    row.series && row.series.loss_pct > 0 ? "warning" : ""
-                  }
+      <div className="ping-rows">
+        {triRows.length > 0
+          ? triRows.map((r) =>
+              row(r.isp, r.label, r.series, (kind) => {
+                setSelected(r.series!.key || r.series!.label);
+                setMode(kind);
+              }),
+            )
+          : row(
+              "single",
+              <>
+                <Clock size={14} />
+                <select
+                  value={selected}
+                  aria-label="延迟目标"
+                  onChange={(event) => setSelected(event.target.value)}
                 >
-                  {!row.series ? "—" : `${row.series.loss_pct.toFixed(1)}%`}
-                </strong>
-              </div>
-              {/* 色块条:内置探针的三网每行是「延迟 + 丢包 + 两条色块条」四格,
-                  这里原来只画了前两格 —— 同一台机器在内外探针上长得不一样,
-                  而且丢了"最近一小时每个桶什么状况"这层信息(用户实报)。
-                  没探到的槽位画空条且不可点,与上面那两格的「—」一致。 */}
-              <button
-                className="ping-blocks"
-                type="button"
-                aria-label={`${row.label} 延迟趋势`}
-                disabled={!row.series}
-                onClick={() => {
-                  if (!row.series) return;
-                  setSelected(row.series.key || row.series.label);
-                  setMode("latency");
-                }}
-              >
-                {blocksOf(row.series?.buckets ?? [], "latency")}
-              </button>
-              <button
-                className="ping-blocks"
-                type="button"
-                aria-label={`${row.label} 丢包率趋势`}
-                disabled={!row.series}
-                onClick={() => {
-                  if (!row.series) return;
-                  setSelected(row.series.key || row.series.label);
-                  setMode("loss");
-                }}
-              >
-                {blocksOf(row.series?.buckets ?? [], "loss")}
-              </button>
-            </Fragment>
-          ))}
-        </div>
-      ) : (
-        <div className="ping-grid">
-          <div className="ping-head">
-            <span>
-              <Clock size={14} />
-              <select
-                value={selected}
-                onChange={(event) => setSelected(event.target.value)}
-              >
-                <option value="__avg__">平均</option>
-                {ping.map((item) => (
-                  <option
-                    key={item.key || item.label}
-                    value={item.key || item.label}
-                  >
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </span>
-            <strong>
-              {current.current_ms < 0
-                ? "超时"
-                : `${current.current_ms.toFixed(0)} ms`}
-            </strong>
-          </div>
-          <div className="ping-head">
-            <span>
-              <Wifi size={14} />
-              丢包率
-            </span>
-            <strong className={current.loss_pct > 0 ? "warning" : ""}>
-              {current.loss_pct.toFixed(1)}%
-            </strong>
-          </div>
-          <button
-            className="ping-blocks"
-            type="button"
-            aria-label="查看延迟趋势"
-            onClick={() => setMode("latency")}
-          >
-            {blocksOf(current.buckets, "latency")}
-          </button>
-          <button
-            className="ping-blocks"
-            type="button"
-            aria-label="查看丢包率趋势"
-            onClick={() => setMode("loss")}
-          >
-            {blocksOf(current.buckets, "loss")}
-          </button>
-        </div>
-      )}
+                  <option value="__avg__">平均</option>
+                  {ping.map((item) => (
+                    <option
+                      key={item.key || item.label}
+                      value={item.key || item.label}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </>,
+              current,
+              (kind) => setMode(kind),
+            )}
+      </div>
       {mode && (
         <TrendDialog
           serverIndex={serverIndex}
@@ -1799,7 +1774,9 @@ function ServerCard({
     <div className="server-title">
       <span className={server.online ? "status online" : "status"} />
       <h2>
-        <Twemoji>{displayServerName(name, `服务器 ${index + 1}`, flag)}</Twemoji>
+        <Twemoji>
+          {displayServerName(name, `服务器 ${index + 1}`, flag)}
+        </Twemoji>
       </h2>
       {issue ? (
         <em className="health-badge bad">
@@ -1807,8 +1784,7 @@ function ServerCard({
           {healthLabels[issue.key]} {issue.pct.toFixed(0)}%
         </em>
       ) : (
-        server.online &&
-        hasMetric && <em className="health-badge ok">健康</em>
+        server.online && hasMetric && <em className="health-badge ok">健康</em>
       )}
       <i className="server-title-gap" />
       {!!server.unlocks?.length && <UnlockHoverIcon unlocks={server.unlocks} />}
@@ -1904,7 +1880,9 @@ function ServerCard({
             <div className="meter">
               <i
                 className={
-                  pct(trafficUsed, server.traffic_limit) > 90 ? "bad" : undefined
+                  pct(trafficUsed, server.traffic_limit) > 90
+                    ? "bad"
+                    : undefined
                 }
                 style={{
                   width: `${pct(trafficUsed, server.traffic_limit)}%`,
@@ -1923,10 +1901,7 @@ function ServerCard({
             </div>
             {trafficBubble.pos &&
               createPortal(
-                <span
-                  className="metric-hover-detail"
-                  style={trafficBubble.pos}
-                >
+                <span className="metric-hover-detail" style={trafficBubble.pos}>
                   <small>计费规则：{trafficRuleLabel(server)}</small>
                   {formula && <small>计费用量 = {formula}</small>}
                   {(server.traffic_used_up !== undefined ||
@@ -1957,72 +1932,56 @@ function ServerCard({
         )}
       </div>
       {(server.upload_speed !== undefined ||
-        server.download_speed !== undefined) && (
-        <div className="speed">
-          <span className="download">
-            <ArrowDown size={16} />
-            {speed(server.download_speed)}
-          </span>
-          <span className="upload">
-            <ArrowUp size={16} />
-            {speed(server.upload_speed)}
-          </span>
-        </div>
-      )}
-      {!dense &&
-        (currentBoot.uplink !== undefined ||
-          currentBoot.downlink !== undefined) && (
-          <div className="cumulative-traffic">
-            <span>
-              <b>
-                <CloudDownload size={14} />
-                本次开机网卡
-              </b>
-              {bytes(currentBoot.downlink, false)}
-            </span>
-            <span>
-              <CloudUpload size={14} />
-              {bytes(currentBoot.uplink, false)}
-            </span>
-          </div>
-        )}
-      {!dense &&
-        (server.tcp_connections !== undefined ||
-          server.udp_connections !== undefined) && (
-          <div className="conn-counts">
-            <small title={CONN_COUNT_HINT}>
-              <Network size={14} />
-              系统连接数
-              <b>
-                {server.conn_history && <ConnLegendDot kind="tcp" />}
-                TCP <span>{connCount(server.tcp_connections)}</span>
-              </b>
-              <b>
-                {server.conn_history && <ConnLegendDot kind="udp" />}
-                UDP <span>{connCount(server.udp_connections)}</span>
-              </b>
-              {server.conn_history && <em>近 1 小时</em>}
-            </small>
-            {server.conn_history && (
+        server.download_speed !== undefined ||
+        (!dense &&
+          (currentBoot.uplink !== undefined ||
+            currentBoot.downlink !== undefined ||
+            server.tcp_connections !== undefined ||
+            server.udp_connections !== undefined))) && (
+        <div className="net-boxes">
+          {(server.upload_speed !== undefined ||
+            server.download_speed !== undefined) && (
+            <div className="net-box">
+              <small>网速</small>
+              <span className="download">↓ {speed(server.download_speed)}</span>
+              <span className="upload">↑ {speed(server.upload_speed)}</span>
+            </div>
+          )}
+          {!dense &&
+            (server.tcp_connections !== undefined ||
+              server.udp_connections !== undefined) && (
               <button
                 type="button"
-                className="conn-sparkline-button"
-                onClick={() => setConnOpen(true)}
-                aria-label="查看连接数历史"
+                className="net-box"
+                title={CONN_COUNT_HINT}
+                disabled={!server.conn_history}
+                aria-label={server.conn_history ? "查看连接数历史" : undefined}
+                onClick={() => server.conn_history && setConnOpen(true)}
               >
-                <ConnSparkline history={server.conn_history} />
+                <small>系统连接数</small>
+                <span>TCP {connCount(server.tcp_connections)}</span>
+                <span>UDP {connCount(server.udp_connections)}</span>
               </button>
             )}
-            {connOpen && (
-              <ConnDialog
-                serverIndex={index}
-                title={name}
-                fallback={server.conn_history}
-                close={() => setConnOpen(false)}
-              />
+          {!dense &&
+            (currentBoot.uplink !== undefined ||
+              currentBoot.downlink !== undefined) && (
+              <div className="net-box" title="本次开机以来网卡收发">
+                <small>开机以来</small>
+                <span>↓ {bytes(currentBoot.downlink, false)}</span>
+                <span>↑ {bytes(currentBoot.uplink, false)}</span>
+              </div>
             )}
-          </div>
-        )}
+          {connOpen && (
+            <ConnDialog
+              serverIndex={index}
+              title={name}
+              fallback={server.conn_history}
+              close={() => setConnOpen(false)}
+            />
+          )}
+        </div>
+      )}
       {!dense && !!server.ping?.length && (
         <PingPanel ping={server.ping} serverIndex={index} triISP={triISP} />
       )}
@@ -2528,13 +2487,7 @@ function ProbeLicenseNameplate({
 }
 
 type ProbeFilter =
-  | "all"
-  | "online"
-  | "offline"
-  | "expiring"
-  | "expired"
-  | "renewal"
-  | "alert";
+  "all" | "online" | "offline" | "expiring" | "expired" | "renewal" | "alert";
 type ProbeGroupBy = "none" | "region";
 type ProbeDensity = "standard" | "dense";
 
@@ -2546,7 +2499,9 @@ function readPref<T extends string>(
 ): T {
   try {
     const v = localStorage.getItem(key);
-    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+    return v && (allowed as readonly string[]).includes(v)
+      ? (v as T)
+      : fallback;
   } catch {
     return fallback;
   }
@@ -2570,49 +2525,271 @@ const sortLabels: Record<ProbeSortKey, string> = {
   latency: "延迟",
 };
 
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+// 顶部指标格:可点击的就是一个筛选入口
+// 与主仓内置探针 probe-page.tsx 的 ProbeStat 同一套布局:三行定高,右侧可挂一栏小图。
+/**
+ * 一行放不下就等比缩小字号直到放得下(最小 minPx),不折行、不截断。用于实时网速这类关键数字:
+ * 宽字体主题 / 窄格子下宁可字小一点,也不能显示成「1.29 M…」。fitKey 变了(数值变了)重新量。
+ */
+function FitText({
+  children,
+  fitKey,
+  minPx = 9,
+  className,
+}: {
+  children: ReactNode;
+  fitKey: string;
+  minPx?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    // 观察格子本身而不是父元素:父元素(文字栏)的宽度跟着文字字号变,观察它会「缩字号 → 父元素变窄 →
+    // 回调里重置字号 → 又变宽」来回打架,停在没缩的状态;格子宽度只由汇总网格决定
+    const box = el?.closest(".kpi") ?? el?.parentElement;
+    if (!el || !box) return;
+    const shrink = () => {
+      el.style.fontSize = "";
+      let size = parseFloat(getComputedStyle(el).fontSize);
+      // 字距 / 图标宽度不随字号等比缩,一次算不准,收敛几轮
+      for (let i = 0; i < 6 && size > minPx; i++) {
+        const need = el.scrollWidth;
+        const avail = el.clientWidth;
+        if (avail <= 0 || need <= avail + 0.5) break;
+        size = Math.max(
+          minPx,
+          Math.floor(((size * avail) / need) * 10) / 10 - 0.2,
+        );
+        el.style.fontSize = `${size}px`;
+      }
+      return el.scrollWidth <= el.clientWidth + 0.5;
+    };
+    // 最小字号都放不下时再藏掉可省的说明字(.fit-drop),只留数值
+    const fit = () => {
+      delete el.dataset.overflow;
+      if (!shrink()) {
+        el.dataset.overflow = "1";
+        shrink();
+      }
+    };
+    fit();
+    // 格子变宽窄、或字体 / 主题变了(文字自身宽度变)都要重量;合到下一帧做一次,
+    // 回调里改字号引起的尺寸变化也只会再排一帧,不会来回打架
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(fit);
+    });
+    ro.observe(box);
+    ro.observe(el);
+    // 字体晚到会改变宽度,到了再量一次
+    void document.fonts?.ready.then(fit);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [fitKey, minPx]);
+  return (
+    <span
+      ref={ref}
+      className={className ? `fit-text ${className}` : "fit-text"}
+    >
+      {children}
+    </span>
   );
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    setMatches(media.matches);
-    const listener = (e: MediaQueryListEvent) => setMatches(e.matches);
-    media.addEventListener("change", listener);
-    return () => media.removeEventListener("change", listener);
-  }, [query]);
-  return matches;
 }
 
-// 顶部指标格:可点击的就是一个筛选入口
-function Kpi({
+function Stat({
+  icon: Icon,
   label,
   value,
-  hint,
-  tone,
+  sub,
+  chart,
+  aside,
   onClick,
+  onMouseLeave,
+  fitSub,
 }: {
+  icon: ComponentType<{ size?: number }>;
   label: string;
   value: ReactNode;
-  hint?: ReactNode;
-  tone?: string;
+  sub?: ReactNode;
+  /** 第三行里跟小字排在一起的小图(进度条 / 分段条) */
+  chart?: ReactNode;
+  /** 右侧独占一栏的图(折线 / 柱状),占满格子高度,不挤文字 */
+  aside?: ReactNode;
   onClick?: () => void;
+  onMouseLeave?: () => void;
+  /** 小字是关键数据(实时网速峰值):放不下时缩字号而不是截成「…」,fitSub 是用来判断要不要重量的文本 */
+  fitSub?: string;
 }) {
-  const body = (
-    <>
-      <span>{label}</span>
-      <strong className={tone}>{value}</strong>
-      {hint && <small>{hint}</small>}
-    </>
+  const text = (
+    <div className="stat-text">
+      <span className="stat-label">
+        <Icon size={14} />
+        <span>{label}</span>
+      </span>
+      <strong className="stat-value">{value}</strong>
+      <span className="stat-sub">
+        {chart}
+        {sub !== undefined &&
+          (fitSub !== undefined ? (
+            <FitText fitKey={fitSub} className="stat-sub-fit">
+              {sub}
+            </FitText>
+          ) : (
+            <span className="stat-sub-text">{sub}</span>
+          ))}
+      </span>
+    </div>
   );
+  const body = aside ? (
+    <div
+      className={
+        fitSub !== undefined ? "stat-with-aside fit-sub" : "stat-with-aside"
+      }
+    >
+      {text}
+      <div className="stat-aside">{aside}</div>
+    </div>
+  ) : (
+    text
+  );
+  const cls = fitSub !== undefined ? "kpi stat speed-cell" : "kpi stat";
   return onClick ? (
-    <button type="button" className="kpi" onClick={onClick}>
+    <button
+      type="button"
+      className={cls}
+      onClick={onClick}
+      onMouseLeave={onMouseLeave}
+    >
       {body}
     </button>
   ) : (
-    <div className="kpi">{body}</div>
+    <div className={cls} onMouseLeave={onMouseLeave}>
+      {body}
+    </div>
   );
 }
+
+// ---- 汇总格里的小图(纯 SVG / flex,随容器拉伸) ----
+
+function areaPath(
+  values: (number | null)[],
+  max: number,
+  w: number,
+  h: number,
+) {
+  const pts = values
+    .map((v, i) =>
+      v === null
+        ? null
+        : [
+            values.length > 1 ? (i / (values.length - 1)) * w : w / 2,
+            h - (max > 0 ? (v / max) * (h - 2) : 0) - 1,
+          ],
+    )
+    .filter((p): p is number[] => p !== null);
+  if (!pts.length) return { line: "", area: "" };
+  const line = pts
+    .map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
+    .join("");
+  const area = `${line}L${pts[pts.length - 1][0].toFixed(1)},${h}L${pts[0][0].toFixed(1)},${h}Z`;
+  return { line, area };
+}
+
+function MiniArea({
+  series,
+  height = 40,
+}: {
+  series: { values: (number | null)[]; color: string }[];
+  height?: number;
+}) {
+  const W = 300;
+  const max = Math.max(
+    0,
+    ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)),
+  );
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${height}`}
+      preserveAspectRatio="none"
+      className="mini-area"
+      style={{ height }}
+      aria-hidden
+    >
+      {series.map((s, i) => {
+        const { line, area } = areaPath(s.values, max, W, height);
+        return (
+          <g key={i}>
+            <path d={area} fill={s.color} fillOpacity={0.14} />
+            <path
+              d={line}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={1.6}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** 柱状图:最后一根高亮(今天) */
+function MiniBars({
+  values,
+  height = 34,
+  titles,
+}: {
+  values: number[];
+  height?: number;
+  titles?: string[];
+}) {
+  const max = Math.max(1, ...values);
+  return (
+    <div className="mini-bars" style={{ height }} aria-hidden>
+      {values.map((v, i) => (
+        <i
+          key={i}
+          title={titles?.[i]}
+          className={i === values.length - 1 ? "today" : undefined}
+          style={{ height: `${Math.max(4, (v / max) * 100)}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** 分段条:各段按数值占比 */
+function SegmentBar({
+  parts,
+}: {
+  parts: { value: number; color: string; title?: string }[];
+}) {
+  const total = parts.reduce((a, p) => a + p.value, 0);
+  return (
+    <span className="seg-bar">
+      {total > 0 &&
+        parts
+          .filter((p) => p.value > 0)
+          .map((p, i) => (
+            <i
+              key={i}
+              title={p.title}
+              style={{
+                width: `${(p.value / total) * 100}%`,
+                background: p.color,
+              }}
+            />
+          ))}
+    </span>
+  );
+}
+
+const money = (v: number) => `¥${v >= 1000 ? v.toFixed(0) : v.toFixed(2)}`;
 
 export function App() {
   const { data, error } = useProbe();
@@ -2621,7 +2798,6 @@ export function App() {
   );
   const [filter, setFilter] = useState<ProbeFilter>("all");
   const [region, setRegion] = useState("all");
-  const [globeOpen, setGlobeOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKeyState] = useState<ProbeSortKey>(() =>
     readPref("probe-sort", PROBE_SORT_KEYS, "default"),
@@ -2633,7 +2809,6 @@ export function App() {
     readPref("probe-density", ["standard", "dense"] as const, "standard"),
   );
   // 宽屏把地球放在指标右边常驻;窄屏放到下面、保持可折叠
-  const wide = useMediaQuery("(min-width: 1024px)");
   const setSortKey = (v: ProbeSortKey) => {
     setSortKeyState(v);
     writePref("probe-sort", v);
@@ -2650,6 +2825,36 @@ export function App() {
     setView(next);
     localStorage.setItem("probe-view", next);
   };
+  // 实时网速折线:每收到一帧快照记一个点(留 40 个 ≈ 3 分钟),只存在这个页面里;
+  // 悬停折线上的某一列 → 大数字与小字换成那一刻的上下行。hooks 必须排在下面的早返回之前。
+  const [speedHistory, setSpeedHistory] = useState<{ d: number; u: number }[]>(
+    [],
+  );
+  const [speedHover, setSpeedHover] = useState<number | null>(null);
+  // 汇总卡实际宽度 → 决定排几列(见 kpiColumns)。卡片是条件渲染的,用回调 ref 挂观察器。
+  const [kpiWidth, setKpiWidth] = useState(0);
+  const kpiObserver = useRef<ResizeObserver | null>(null);
+  const kpiGridRef = useCallback((el: HTMLDivElement | null) => {
+    kpiObserver.current?.disconnect();
+    kpiObserver.current = null;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setKpiWidth(el.clientWidth));
+    ro.observe(el);
+    setKpiWidth(el.clientWidth);
+    kpiObserver.current = ro;
+  }, []);
+  const liveDown = (data?.servers || []).reduce(
+    (sum, server) => sum + (server.download_speed || 0),
+    0,
+  );
+  const liveUp = (data?.servers || []).reduce(
+    (sum, server) => sum + (server.upload_speed || 0),
+    0,
+  );
+  useEffect(() => {
+    if (!data) return;
+    setSpeedHistory((prev) => [...prev, { d: liveDown, u: liveUp }].slice(-40));
+  }, [liveDown, liveUp, data]);
   if (!data && !error)
     return (
       <main className="center">
@@ -2782,368 +2987,532 @@ export function App() {
     0,
   );
   const todayTraffic = todayTrafficTotal(servers);
-  const avgLoad = averageLoad(servers);
+  const dailySeries = dailyTrafficSeries(servers, 14);
+  const conns = connectionTotals(servers);
+  const quota = quotaSummary(servers, (s) => billableTraffic(s as ProbeServer));
+  const latency = latencySummary(servers);
+  const monthly = monthlyCost(servers);
+  const upcoming = nextExpiry(servers);
+  // 汇总格右栏:宽屏时格子很宽,三行文字只占左边一截,右栏放点有信息量的图
+  const connHist = connHistoryTotals(servers);
+  const expiries = upcomingExpiries(servers);
   const showGlobe = !!data.show_globe && globeRegions.length > 0;
   const regionCount = new Set(globeRegions).size;
+  const hov =
+    speedHover !== null && speedHover < speedHistory.length
+      ? speedHistory[speedHover]
+      : null;
+  const speedAgo =
+    speedHover !== null ? (speedHistory.length - 1 - speedHover) * 3 : 0;
+  // 峰值写成「3 分钟峰值 ↓ x · ↑ y」:去掉「近」省宽度,放不下时缩字号(见 FitText)
+  const speedSub = hov
+    ? speedAgo === 0
+      ? "现在"
+      : `${speedAgo} 秒前`
+    : speedHistory.length > 1
+      ? `3 分钟峰值|${speed(Math.max(...speedHistory.map((p) => p.d)))}|${speed(Math.max(...speedHistory.map((p) => p.u)))}`
+      : "全部服务器合计";
+  const speedValue = `${speed(hov ? hov.d : liveDown)}|${speed(hov ? hov.u : liveUp)}`;
   const kpis = [
-    <Kpi
-      key="total"
-      label="总节点"
-      value={servers.length}
-      hint="点击查看全部"
-      onClick={() => selectFilter("all")}
-    />,
-    <Kpi
-      key="online"
-      label="在线"
-      value={onlineCount}
-      tone="online"
-      hint={
+    <Stat
+      key="servers"
+      icon={Server}
+      label="服务器"
+      value={
         <>
-          离线 <b className={offlineCount > 0 ? "offline" : ""}>{offlineCount}</b>
+          <span className="online">{onlineCount}</span>
+          <span className="stat-dim"> / {servers.length} 在线</span>
         </>
       }
-      onClick={() => selectFilter(offlineCount > 0 ? "offline" : "online")}
+      sub={
+        <>
+          离线{" "}
+          <b className={offlineCount > 0 ? "offline" : ""}>{offlineCount}</b>
+          {" · "}告警{" "}
+          <b className={alertCount > 0 ? "offline" : ""}>{alertCount}</b>
+          {regionCount > 0 && ` · ${regionCount} 个地区`}
+        </>
+      }
+      onClick={() => selectFilter(offlineCount > 0 ? "offline" : "all")}
     />,
     hasSpeed && (
-      <Kpi
+      <Stat
         key="speed"
-        label="总下行 / 上行"
-        value={<span className="down">↓ {speed(totalDownload)}</span>}
-        hint={<span className="up">↑ {speed(totalUpload)}</span>}
+        fitSub={speedSub}
+        icon={Activity}
+        label="实时网速"
+        value={
+          <FitText fitKey={speedValue} minPx={10} className="stat-speed">
+            <span className="down">↓ {speed(hov ? hov.d : liveDown)}</span>{" "}
+            <span className="up">↑ {speed(hov ? hov.u : liveUp)}</span>
+          </FitText>
+        }
+        sub={
+          speedSub.includes("|") ? (
+            <>
+              <span className="fit-drop">{speedSub.split("|")[0]} </span>↓{" "}
+              {speedSub.split("|")[1]} · ↑ {speedSub.split("|")[2]}
+            </>
+          ) : (
+            speedSub
+          )
+        }
+        onMouseLeave={() => setSpeedHover(null)}
+        aside={
+          speedHistory.length > 1 ? (
+            <>
+              <div className="stat-aside-fill">
+                <MiniArea
+                  height={48}
+                  series={[
+                    { values: speedHistory.map((p) => p.d), color: "#22c55e" },
+                    { values: speedHistory.map((p) => p.u), color: "#f97316" },
+                  ]}
+                />
+              </div>
+              {/* 透明列:hover 哪一列就读哪一刻;竖线标出位置 */}
+              <div
+                className="stat-aside-cols"
+                style={{
+                  gridTemplateColumns: `repeat(${speedHistory.length}, minmax(0, 1fr))`,
+                }}
+              >
+                {speedHistory.map((_, i) => (
+                  <span
+                    key={i}
+                    className={speedHover === i ? "hot" : undefined}
+                    onMouseEnter={() => setSpeedHover(i)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : undefined
+        }
+      />
+    ),
+    conns && (
+      <Stat
+        key="conns"
+        icon={Network}
+        label="连接数"
+        value={conns.total.toLocaleString()}
+        sub={`TCP ${conns.tcp.toLocaleString()} · UDP ${conns.udp.toLocaleString()}`}
+        aside={
+          connHist && connHist.tcp.length > 1 ? (
+            <div className="stat-aside-bottom">
+              <MiniArea
+                height={48}
+                series={[
+                  { values: connHist.tcp, color: "#3b82f6" },
+                  { values: connHist.udp, color: "#a855f7" },
+                ]}
+              />
+            </div>
+          ) : undefined
+        }
       />
     ),
     todayTraffic !== undefined && (
-      <Kpi
+      <Stat
         key="today"
+        icon={BarChart3}
         label="今日流量"
         value={bytes(todayTraffic, false)}
-        hint="全部服务器合计"
+        sub={
+          dailySeries.length > 1
+            ? `近 ${dailySeries.length} 天 ${bytes(
+                dailySeries.reduce((a, d) => a + d.total, 0),
+                false,
+              )}`
+            : "全部服务器合计"
+        }
+        aside={
+          dailySeries.length > 1 ? (
+            <div className="stat-aside-bottom">
+              <MiniBars
+                values={dailySeries.map((d) => d.total)}
+                titles={dailySeries.map(
+                  (d) => `${d.date} ${bytes(d.total, false)}`,
+                )}
+              />
+            </div>
+          ) : undefined
+        }
       />
     ),
-    (avgLoad.cpu !== undefined ||
-      avgLoad.mem !== undefined ||
-      avgLoad.disk !== undefined) && (
-      <Kpi
-        key="load"
-        label="平均负载"
-        value={
-          avgLoad.cpu !== undefined
-            ? `CPU ${avgLoad.cpu.toFixed(0)}%`
-            : avgLoad.mem !== undefined
-              ? `内存 ${avgLoad.mem.toFixed(0)}%`
-              : `硬盘 ${avgLoad.disk!.toFixed(0)}%`
-        }
-        hint={[
-          avgLoad.cpu !== undefined && avgLoad.mem !== undefined
-            ? `内存 ${avgLoad.mem.toFixed(0)}%`
-            : "",
-          avgLoad.disk !== undefined &&
-          (avgLoad.cpu !== undefined || avgLoad.mem !== undefined)
-            ? `硬盘 ${avgLoad.disk.toFixed(0)}%`
-            : "",
-        ]
+    (quota || latency) && (
+      <Stat
+        key="quota-latency"
+        icon={Gauge}
+        label={[quota && "本期流量额度", latency && "网络质量"]
           .filter(Boolean)
           .join(" · ")}
+        value={
+          <span className="stat-pair">
+            {quota && <span>{quota.pct.toFixed(quota.pct < 10 ? 1 : 0)}%</span>}
+            {latency && (
+              <span>
+                {latency.avgMs !== undefined ? (
+                  <>
+                    {latency.avgMs}
+                    <span className="stat-dim"> ms</span>
+                  </>
+                ) : (
+                  "—"
+                )}
+              </span>
+            )}
+          </span>
+        }
+        chart={
+          <span className="stat-inline-charts">
+            {quota && (
+              <>
+                <span className="seg-bar grow">
+                  <i
+                    style={{
+                      width: `${Math.min(100, quota.pct)}%`,
+                      background:
+                        quota.pct >= 90
+                          ? "#ef4444"
+                          : quota.pct >= 80
+                            ? "#f59e0b"
+                            : "var(--primary)",
+                    }}
+                  />
+                </span>
+                <span>
+                  {bytes(quota.used, false)} / {bytes(quota.limit, false)}
+                </span>
+              </>
+            )}
+            {latency && (
+              <>
+                <span className="seg-wrap">
+                  <SegmentBar
+                    parts={[
+                      {
+                        value: latency.good,
+                        color: "#22c55e",
+                        title: `优 ${latency.good}`,
+                      },
+                      {
+                        value: latency.fair,
+                        color: "#f59e0b",
+                        title: `中 ${latency.fair}`,
+                      },
+                      {
+                        value: latency.poor,
+                        color: "#ef4444",
+                        title: `差 ${latency.poor}`,
+                      },
+                    ]}
+                  />
+                </span>
+                <span>
+                  丢包 {latency.avgLoss.toFixed(latency.avgLoss < 10 ? 1 : 0)}%
+                </span>
+              </>
+            )}
+          </span>
+        }
       />
     ),
     hasExpiry && (
-      <Kpi
+      <Stat
         key="renewal"
-        label="待续费"
-        value={renewalCount}
-        tone={renewalCount > 0 ? "warn" : undefined}
-        hint={
-          renewalAmount > 0
-            ? `30 天内 · 合计 ¥${renewalAmount.toFixed(2)}`
-            : "30 天内到期"
+        icon={Wallet}
+        aside={
+          expiries.length > 0 ? (
+            <div className="expiry-list">
+              {expiries.map((e) => (
+                <span key={e.name}>
+                  <span>{e.name || "—"}</span>
+                  <span
+                    className={
+                      e.days < 0 ? "gone" : e.days <= 7 ? "soon" : undefined
+                    }
+                  >
+                    {e.days < 0
+                      ? `过期 ${-e.days} 天`
+                      : e.days === 0
+                        ? "今天"
+                        : `${e.days} 天`}
+                  </span>
+                </span>
+              ))}
+            </div>
+          ) : undefined
         }
+        label="续费"
+        value={
+          <>
+            <span className={renewalCount > 0 ? "warn" : undefined}>
+              {renewalCount}
+            </span>
+            <span className="stat-dim"> 台 30 天内到期</span>
+          </>
+        }
+        sub={[
+          renewalAmount > 0 && money(renewalAmount),
+          monthly !== undefined && `月均 ${money(monthly)}`,
+          upcoming &&
+            `最近 ${upcoming.name || "—"} ${
+              upcoming.days === 0 ? "今天" : `${upcoming.days} 天`
+            }`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         onClick={() => selectFilter("renewal")}
       />
     ),
   ].filter(Boolean);
   const globeBody = (
     <Suspense fallback={<div className="globe-loading">正在加载国界数据…</div>}>
-      <RegionGlobe regions={globeRegions} compact={wide} />
+      <RegionGlobe regions={globeRegions} compact />
     </Suspense>
+  );
+  // 按卡宽算列数、各行格数均分(见 kpiColumns):auto-fit 在宽屏上会排成 5 + 2,第二行右边空一大块
+  const kpiGrid = (
+    <div
+      ref={kpiGridRef}
+      className="kpi-grid six"
+      style={{
+        gridTemplateColumns: `repeat(${kpiColumns(kpis.length, kpiWidth)}, minmax(0, 1fr))`,
+      }}
+    >
+      {kpis}
+    </div>
   );
   return (
     <HistoryDaysContext.Provider value={data.history_days ?? 1}>
-    <div
-      className={
-        data.license_badge ? "app-shell has-license-footer" : "app-shell"
-      }
-    >
-      <header className="topbar">
-        <div>
-          {data.logo && <img src={data.logo} alt="" />}
-          <h1>{title}</h1>
-        </div>
-        <nav>
-          <ThemeSwitch appearance={data.appearance} />
-          <PasskeyLogin />
-          <button
-            aria-label="卡片视图"
-            title="卡片视图"
-            className={view === "card" ? "active" : ""}
-            onClick={() => setMode("card")}
-          >
-            <LayoutGrid size={18} />
-          </button>
-          <button
-            aria-label="列表视图"
-            title="列表视图"
-            className={view === "list" ? "active" : ""}
-            onClick={() => setMode("list")}
-          >
-            <List size={18} />
-          </button>
-        </nav>
-      </header>
-      {servers.length > 0 &&
-        (showGlobe && wide ? (
-          <section className="overview with-globe">
-            <div className="kpi-grid three">{kpis}</div>
-            <article className="globe-mini">
-              <header>
-                <span>
-                  <Globe2 size={16} />
-                  地区分布
-                </span>
-                <small>
-                  {regionCount} 个地区 · {globeRegions.length} 台
-                </small>
-              </header>
-              {globeBody}
-            </article>
-          </section>
-        ) : (
-          <>
-            <section className="overview">
-              <div className={showGlobe ? "kpi-grid three" : "kpi-grid"}>
-                {kpis}
-              </div>
-            </section>
-            {showGlobe && (
-              <section className={`globe-card ${globeOpen ? "open" : ""}`}>
-                <button
-                  className="globe-toggle"
-                  type="button"
-                  aria-expanded={globeOpen}
-                  onClick={() => setGlobeOpen((value) => !value)}
-                >
-                  <span>
-                    <Globe2 size={18} />
-                    地区分布
-                  </span>
-                  <span>
-                    {regionCount} 个地区
-                    <ChevronDown size={17} />
-                  </span>
-                </button>
-                {globeOpen && globeBody}
-              </section>
-            )}
-          </>
-        ))}
-      <section className="probe-toolbar">
-        <div className="filters">
-          <label className="probe-search">
-            <Search size={14} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索服务器名称…"
-              aria-label="搜索服务器"
-            />
-          </label>
-          <button
-            className={filter === "all" ? "active" : ""}
-            onClick={() => selectFilter("all")}
-          >
-            全部 {servers.length}
-          </button>
-          <button
-            className={filter === "online" ? "active" : ""}
-            onClick={() => selectFilter("online")}
-          >
-            在线 {onlineCount}
-          </button>
-          <button
-            className={filter === "offline" ? "active" : ""}
-            onClick={() => selectFilter("offline")}
-          >
-            离线 {offlineCount}
-          </button>
-          {hasMetrics && (
+      <div
+        className={
+          data.license_badge ? "app-shell has-license-footer" : "app-shell"
+        }
+      >
+        <header className="topbar">
+          <div>
+            {data.logo && <img src={data.logo} alt="" />}
+            <h1>{title}</h1>
+          </div>
+          <nav>
+            <ThemeSwitch appearance={data.appearance} />
+            <PasskeyLogin />
             <button
-              className={filter === "alert" ? "active danger" : "danger"}
-              title="CPU、内存、硬盘或计费用量超过 90%"
-              onClick={() => selectFilter("alert")}
+              aria-label="卡片视图"
+              title="卡片视图"
+              className={view === "card" ? "active" : ""}
+              onClick={() => setMode("card")}
             >
-              <TriangleAlert size={13} /> 告警 {alertCount}
+              <LayoutGrid size={18} />
             </button>
-          )}
-          {hasExpiry && (
-            <>
-              <button
-                className={filter === "renewal" ? "active warning" : "warning"}
-                onClick={() => selectFilter("renewal")}
-              >
-                待续费 {renewalCount}
-              </button>
-              <button
-                className={filter === "expiring" ? "active warning" : "warning"}
-                onClick={() => selectFilter("expiring")}
-              >
-                即将到期 {expiringCount}
-              </button>
-              <button
-                className={filter === "expired" ? "active danger" : "danger"}
-                onClick={() => selectFilter("expired")}
-              >
-                已到期 {expiredCount}
-              </button>
-            </>
-          )}
-          <div className="toolbar-end">
-            {regions.length > 0 && (
-              <label className="region-filter">
-                <MapPin size={14} />
-                <select
-                  aria-label="地区筛选"
-                  value={region}
-                  onChange={(event) => selectRegion(event.target.value)}
+            <button
+              aria-label="列表视图"
+              title="列表视图"
+              className={view === "list" ? "active" : ""}
+              onClick={() => setMode("list")}
+            >
+              <List size={18} />
+            </button>
+          </nav>
+        </header>
+        {servers.length > 0 &&
+          (showGlobe ? (
+            <section className="overview with-globe">
+              {kpiGrid}
+              {/* 右侧只放地球本身,不再带地区标签:标签占掉一半宽度让地球只有 112px */}
+              <article className="globe-mini">
+                <div className="globe-mini-stage">{globeBody}</div>
+              </article>
+            </section>
+          ) : (
+            <section className="overview">{kpiGrid}</section>
+          ))}
+        <section className="probe-toolbar">
+          <div className="filters">
+            <label className="probe-search">
+              <Search size={14} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="搜索服务器名称…"
+                aria-label="搜索服务器"
+              />
+            </label>
+            <div role="group" aria-label="状态筛选" className="filter-seg">
+              {(
+                [
+                  ["all", "全部", servers.length, ""],
+                  ["online", "在线", onlineCount, ""],
+                  ["offline", "离线", offlineCount, "danger"],
+                  hasMetrics && ["alert", "告警", alertCount, "danger"],
+                  hasExpiry && ["renewal", "待续费", renewalCount, "warning"],
+                  hasExpiry && [
+                    "expiring",
+                    "即将到期",
+                    expiringCount,
+                    "warning",
+                  ],
+                  hasExpiry && ["expired", "已到期", expiredCount, "danger"],
+                ].filter(Boolean) as [ProbeFilter, string, number, string][]
+              ).map(([key, label, count, tone]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={filter === key}
+                  title={
+                    key === "alert"
+                      ? "CPU、内存、硬盘或计费用量超过 90%"
+                      : undefined
+                  }
+                  onClick={() => selectFilter(key)}
                 >
-                  <option value="all">全部地区</option>
-                  {regions.map((item) => (
-                    <option value={item} key={item}>
-                      {item}
+                  {label}{" "}
+                  <em className={count > 0 ? tone : undefined}>{count}</em>
+                </button>
+              ))}
+            </div>
+            <div className="toolbar-end">
+              {regions.length > 0 && (
+                <label className="region-filter">
+                  <MapPin size={14} />
+                  <select
+                    aria-label="地区筛选"
+                    value={region}
+                    onChange={(event) => selectRegion(event.target.value)}
+                  >
+                    <option value="all">全部地区</option>
+                    {regions.map((item) => (
+                      <option value={item} key={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="region-filter">
+                排序
+                <select
+                  aria-label="排序"
+                  value={sortKey}
+                  onChange={(event) =>
+                    setSortKey(event.target.value as ProbeSortKey)
+                  }
+                >
+                  {PROBE_SORT_KEYS.map((key) => (
+                    <option value={key} key={key}>
+                      {sortLabels[key]}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-            <label className="region-filter">
-              排序
-              <select
-                aria-label="排序"
-                value={sortKey}
-                onChange={(event) =>
-                  setSortKey(event.target.value as ProbeSortKey)
-                }
-              >
-                {PROBE_SORT_KEYS.map((key) => (
-                  <option value={key} key={key}>
-                    {sortLabels[key]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {view === "card" && (
-              <>
-                {regions.length > 0 && (
-                  <label className="region-filter">
-                    分组
-                    <select
-                      aria-label="分组"
-                      value={groupBy}
-                      onChange={(event) =>
-                        setGroupBy(event.target.value as ProbeGroupBy)
-                      }
+              {view === "card" && (
+                <>
+                  {regions.length > 0 && (
+                    <label className="region-filter">
+                      分组
+                      <select
+                        aria-label="分组"
+                        value={groupBy}
+                        onChange={(event) =>
+                          setGroupBy(event.target.value as ProbeGroupBy)
+                        }
+                      >
+                        <option value="none">不分组</option>
+                        <option value="region">按地区</option>
+                      </select>
+                    </label>
+                  )}
+                  <span className="density-toggle">
+                    <button
+                      className={density === "standard" ? "active" : ""}
+                      onClick={() => setDensity("standard")}
                     >
-                      <option value="none">不分组</option>
-                      <option value="region">按地区</option>
-                    </select>
-                  </label>
-                )}
-                <span className="density-toggle">
-                  <button
-                    className={density === "standard" ? "active" : ""}
-                    onClick={() => setDensity("standard")}
-                  >
-                    标准
-                  </button>
-                  <button
-                    className={density === "dense" ? "active" : ""}
-                    onClick={() => setDensity("dense")}
-                  >
-                    紧凑
-                  </button>
-                </span>
-              </>
-            )}
+                      标准
+                    </button>
+                    <button
+                      className={density === "dense" ? "active" : ""}
+                      onClick={() => setDensity("dense")}
+                    >
+                      紧凑
+                    </button>
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
-      <main
-        key={view}
-        className={`servers ${view}${view === "card" ? " grouped" : ""}`}
-      >
-        {visible.length ? (
-          view === "card" ? (
-            groups.map((group) => (
-              <section key={group.key} className="server-group">
-                {groupBy === "region" && (
-                  <h2 className="group-heading">
-                    <Twemoji>
-                      {group.flag ? `${group.flag} ${group.label}` : group.label}
-                    </Twemoji>
-                    <small>{group.items.length} 台</small>
-                  </h2>
-                )}
-                <div
-                  className={[
-                    "server-grid",
-                    density === "dense" ? "dense" : "",
-                    groupBy === "region" ? "fill" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  {group.items.map(({ server, index }) => (
-                    <ServerCard
-                      key={server.name || index}
-                      server={server}
-                      index={index}
-                      triISP={data?.tri_isp}
-                      dense={density === "dense"}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))
+        </section>
+        <main
+          key={view}
+          className={`servers ${view}${view === "card" ? " grouped" : ""}`}
+        >
+          {visible.length ? (
+            view === "card" ? (
+              groups.map((group) => (
+                <section key={group.key} className="server-group">
+                  {groupBy === "region" && (
+                    <h2 className="group-heading">
+                      <Twemoji>
+                        {group.flag
+                          ? `${group.flag} ${group.label}`
+                          : group.label}
+                      </Twemoji>
+                      <small>{group.items.length} 台</small>
+                    </h2>
+                  )}
+                  <div
+                    className={[
+                      "server-grid",
+                      density === "dense" ? "dense" : "",
+                      groupBy === "region" ? "fill" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {group.items.map(({ server, index }) => (
+                      <ServerCard
+                        key={server.name || index}
+                        server={server}
+                        index={index}
+                        triISP={data?.tri_isp}
+                        dense={density === "dense"}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            ) : (
+              <ServerTable servers={visible.map(({ server }) => server)} />
+            )
           ) : (
-            <ServerTable servers={visible.map(({ server }) => server)} />
-          )
-        ) : (
-          <div className="empty">
-            <span>暂无符合筛选条件的服务器</span>
-            <button type="button" onClick={clearFilters}>
-              查看全部
-            </button>
+            <div className="empty">
+              <span>暂无符合筛选条件的服务器</span>
+              <button type="button" onClick={clearFilters}>
+                查看全部
+              </button>
+            </div>
+          )}
+        </main>
+        <footer>
+          Powered by{" "}
+          <a
+            href="https://github.com/mmwx-group"
+            target="_blank"
+            rel="noreferrer"
+          >
+            MMWX Group
+          </a>
+        </footer>
+        {data.license_badge && (
+          <div className="probe-license-footer">
+            <ProbeLicenseNameplate
+              name={data.license_badge.name}
+              displayName={data.license_badge.display_name}
+            />
           </div>
         )}
-      </main>
-      <footer>
-        Powered by{" "}
-        <a
-          href="https://github.com/mmwx-group"
-          target="_blank"
-          rel="noreferrer"
-        >
-          MMWX Group
-        </a>
-      </footer>
-      {data.license_badge && (
-        <div className="probe-license-footer">
-          <ProbeLicenseNameplate
-            name={data.license_badge.name}
-            displayName={data.license_badge.display_name}
-          />
-        </div>
-      )}
-    </div>
+      </div>
     </HistoryDaysContext.Provider>
   );
 }
