@@ -143,19 +143,13 @@ button {
   flex-direction: column;
   gap: 16px;
 }
+/* 用 auto-fill:筛选后只剩一两台、或分组里只有一两台时不该被拉满整行,列宽与满屏时一致 */
 .server-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
   gap: 16px;
 }
 .server-grid.dense {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-}
-/* 分组时用 auto-fill:只有一两台的组不该被拉满整行,各组列宽对齐 */
-.server-grid.fill {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-}
-.server-grid.dense.fill {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
 }
 .server-group {
@@ -347,11 +341,35 @@ button.kpi:hover {
   gap: 8px;
   margin-left: auto;
 }
+.toolbar-end .region-filter {
+  height: 34px;
+  box-sizing: border-box;
+  margin-left: 0;
+  padding: 0 10px;
+  font-size: 13px;
+}
+/* 标准 / 紧凑:跟状态筛选同一种分段样式 */
 .density-toggle {
   display: inline-flex;
+  gap: 2px;
+  border-radius: 9px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
 }
-.density-toggle button + button {
-  margin-left: -1px;
+.filters .density-toggle > button {
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+}
+.filters .density-toggle > button.active {
+  color: inherit;
+  background: var(--surface);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 /* 宽屏吸顶;窄屏换行后太高,吸顶会遮住半屏 */
 @media (min-width: 1024px) {
@@ -808,6 +826,8 @@ button.net-box:not(:disabled):hover {
   background: #ef4444;
 }
 .return-route-badges {
+  /* 回程徽章按这一行的实际宽度切横排/竖排(见下方 @container),不按屏幕宽 */
+  container-type: inline-size;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -2010,6 +2030,7 @@ footer a:hover {
   border: 0;
   outline: 0;
   color: inherit;
+  font: inherit;
   background: transparent;
   cursor: pointer;
 }
@@ -2089,7 +2110,25 @@ footer a:hover {
     padding-inline: 22px;
   }
 }
-@media (max-width: 640px) {
+/* 回程徽章按这一行的实际宽度排版:≥320px 横排;262–319px 横排但收紧图标和内边距;
+   不到 262px 时运营商名才改竖排小字 */
+@container (width < 320px) {
+  .route-badge-animation {
+    padding: 2px;
+  }
+  .route-badge-text {
+    padding: 3px 1px;
+  }
+  .route-badge small {
+    letter-spacing: -0.04em;
+  }
+  .route-badge strong {
+    margin-left: 2px;
+    font-size: 9.5px;
+    letter-spacing: -0.03em;
+  }
+}
+@container (width < 262px) {
   .route-badge-animation {
     padding: 2px;
   }
@@ -2409,6 +2448,13 @@ footer a:hover {
   }
   .stat-aside {
     display: none;
+  }
+  /* 网速格在手机上独占一行,宽度够放小图 */
+  .stat-with-aside.fit-sub {
+    grid-template-columns: minmax(0, max-content) minmax(64px, 1fr);
+  }
+  .stat-with-aside.fit-sub .stat-aside {
+    display: block;
   }
 }
 .stat-label {

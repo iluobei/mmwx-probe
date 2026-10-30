@@ -2726,6 +2726,62 @@
   padding: 1.35rem 0;
 }
 
+/* 实时上下行:两格并排,标签 / 数值与上面 CPU、内存、硬盘同一套字号和配色 */
+.premium-probe-card-speed {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: -0.35rem 0 1.15rem;
+  min-width: 0;
+}
+
+.premium-probe-card-speed > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgba(216, 180, 106, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(216, 180, 106, 0.05);
+}
+
+.premium-probe-card-speed svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  color: var(--pp-gold);
+}
+
+.premium-probe-card-speed span {
+  flex: 0 0 auto;
+  color: #9f9786;
+  font-size: 0.7rem;
+}
+
+.premium-probe-card-speed strong {
+  overflow: hidden;
+  margin-left: auto;
+  color: #eee5d2;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root.light .premium-probe-card-speed > div {
+  border-color: rgba(168, 124, 34, 0.18);
+  background: rgba(168, 124, 34, 0.045);
+}
+
+:root.light .premium-probe-card-speed span {
+  color: #8e8675;
+}
+
+:root.light .premium-probe-card-speed strong {
+  color: #241e14;
+}
+
 .premium-probe-server-footer {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
@@ -3756,9 +3812,10 @@
   width: 14px;
   height: 14px;
 }
+/* 选中态与页面上其它切换按钮(视图切换、筛选)一致:金色渐变 + 深色字 */
 .premium-probe-forward-modes button.is-active {
-  color: var(--pp-gold-bright);
-  background: rgba(216, 180, 106, 0.12);
+  color: #1a1305;
+  background: linear-gradient(90deg, #b97f22, #e2bf65);
 }
 .premium-probe-forward-modes button:not(.is-active):hover {
   color: #f3ecdc;
@@ -4354,7 +4411,7 @@
   background: color-mix(in srgb, currentColor 4%, transparent);
 }
 /* light 主题:暗色主题的浅灰字在奶白底上过淡,统一压深 */
-:root.light .premium-probe-forward-modes button,
+:root.light .premium-probe-forward-modes button:not(.is-active),
 :root.light .premium-probe-forward-chaintabs button,
 :root.light .premium-probe-forward-chainbar .k,
 :root.light .premium-probe-forward-stats .stat .k,
@@ -4373,6 +4430,10 @@
 :root.light .premium-probe-forward-empty,
 :root.light .premium-probe-forward-trend-empty {
   color: #8a7f64;
+}
+/* light 主题:按钮组底色不要用暗色主题的半透明黑(奶白底上成了一块灰) */
+:root.light .premium-probe-forward-modes {
+  background: rgba(168, 124, 34, 0.06);
 }
 /* light 主题:近白值色(链路结构)在奶白底上不可见 → 用主题深色文字 */
 :root.light .premium-probe-forward-stats .stat.is-n .v {
